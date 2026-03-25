@@ -16,6 +16,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: 'npm'
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -23,18 +24,24 @@ jobs:
           python-version: '3.11'
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: Install backend dependencies
         run: |
-          pip install -r backend/requirements.txt -t python-embed/lib/python3.11/site-packages
-          mkdir -p python-embed/bin
-          cp $(which python3) python-embed/bin/ || true
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
 
-      - name: Build Python embed package
+      - name: Build frontend and Electron
+        run: npm run build:frontend
+
+      - name: Prepare Python embed package
         run: |
-          # 使用 Homebrew Python 创建嵌入包
-          python -m pip install -r backend/requirements.txt --target ./python-embed/lib/python3.11/site-packages
+          mkdir -p python-embed/lib
+          pip install -r backend/requirements.txt --target ./python-embed/lib/python3.11/site-packages
+          # Create a simple python wrapper script
+          echo '#!/bin/bash
+          exec python3 "$@"' > python-embed/python3
+          chmod +x python-embed/python3
 
       - name: Build Electron app
         run: npm run package:mac
@@ -58,22 +65,29 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: 'npm'
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      - name: Install frontend dependencies
+        run: npm ci
+
       - name: Download Python embeddable package
         run: |
-          curl -o python-embed.zip https://www.python.org/ftp/python/3.11.8/python-3.11.8-embed-amd64.zip
+          Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.11.8/python-3.11.8-embed-amd64.zip" -OutFile "python-embed.zip"
           Expand-Archive python-embed.zip -DestinationPath python-embed
         shell: powershell
 
-      - name: Install dependencies
+      - name: Install backend dependencies
         run: |
-          npm install
+          python -m pip install --upgrade pip
           pip install -r backend/requirements.txt --target ./python-embed/Lib/site-packages
+
+      - name: Build frontend and Electron
+        run: npm run build:frontend
 
       - name: Build Electron app
         run: npm run package:win
@@ -91,9 +105,6 @@ jobs:
     needs: [build-mac, build-win]
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Download macOS artifact
         uses: actions/download-artifact@v4
         with:

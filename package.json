@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
+    "build:frontend": "vite build",
     "preview": "vite preview",
     "dev:backend": "cd backend && python -m uvicorn main:app --reload --port 8765",
     "package:mac": "electron-builder --mac",
