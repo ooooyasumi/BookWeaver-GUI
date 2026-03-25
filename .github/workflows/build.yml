@@ -1,0 +1,117 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Install backend dependencies
+        run: |
+          pip install -r backend/requirements.txt -t python-embed/lib/python3.11/site-packages
+          mkdir -p python-embed/bin
+          cp $(which python3) python-embed/bin/ || true
+
+      - name: Build Python embed package
+        run: |
+          # 使用 Homebrew Python 创建嵌入包
+          python -m pip install -r backend/requirements.txt --target ./python-embed/lib/python3.11/site-packages
+
+      - name: Build Electron app
+        run: npm run package:mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BookWeaver-mac
+          path: release/*.dmg
+          retention-days: 7
+
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Download Python embeddable package
+        run: |
+          curl -o python-embed.zip https://www.python.org/ftp/python/3.11.8/python-3.11.8-embed-amd64.zip
+          Expand-Archive python-embed.zip -DestinationPath python-embed
+        shell: powershell
+
+      - name: Install dependencies
+        run: |
+          npm install
+          pip install -r backend/requirements.txt --target ./python-embed/Lib/site-packages
+
+      - name: Build Electron app
+        run: npm run package:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BookWeaver-win
+          path: release/*.exe
+          retention-days: 7
+
+  release:
+    needs: [build-mac, build-win]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BookWeaver-mac
+          path: release-mac
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: BookWeaver-win
+          path: release-win
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            release-mac/*
+            release-win/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
