@@ -1,0 +1,122 @@
+/* 全局样式 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 拖拽区域 */
+.drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  border: 2px dashed #d9d9d9;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.drop-zone.active {
+  border-color: #1890ff;
+  background-color: rgba(24, 144, 255, 0.05);
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 布局 */
+.app-layout {
+  height: 100%;
+}
+
+.sidebar {
+  background: #001529;
+}
+
+.content {
+  padding: 24px;
+  background: #f0f2f5;
+  min-height: 100%;
+}
+
+/* 卡片样式 */
+.page-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  min-height: calc(100vh - 48px);
+}
+
+/* 搜索栏 */
+.search-bar {
+  margin-bottom: 24px;
+}
+
+/* 书籍表格 */
+.book-table {
+  margin-top: 16px;
+}
+
+/* AI 悬浮按钮 */
+.ai-float-button {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 100;
+}
+
+/* 下载进度条 */
+.download-progress {
+  margin: 8px 0;
+}
+
+/* 批次文件夹 */
+.batch-folder {
+  padding: 16px;
+  margin-bottom: 8px;
+  background: #fafafa;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.batch-folder:hover {
+  background: #f0f0f0;
+}
+
+/* 标题栏拖拽区域 (macOS) */
+.title-bar {
+  -webkit-app-region: drag;
+}
+
+.title-bar button {
+  -webkit-app-region: no-drag;
+}

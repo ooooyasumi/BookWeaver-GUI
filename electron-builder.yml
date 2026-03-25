@@ -1,0 +1,24 @@
+appId: com.bookweaver.app
+productName: BookWeaver
+directories:
+  output: release
+
+mac:
+  target: dmg
+  category: public.app-category.productivity
+
+win:
+  target: nsis
+
+extraResources:
+  - from: "python-embed"
+    to: "python"
+    filter: ["**/*"]
+  - from: "backend"
+    to: "backend"
+    filter: ["**/*"]
+
+files:
+  - "dist/**/*"
+  - "dist-electron/**/*"
+  - "package.json"
