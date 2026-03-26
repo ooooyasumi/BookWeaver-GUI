@@ -31,15 +31,17 @@ export function Sidebar() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div
+        className="drag-region"
         style={{
           height: 48,
+          flex: '0 0 48px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           borderBottom: '1px solid rgba(255,255,255,0.1)'
         }}
       >
-        <span style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>
+        <span style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', marginLeft: 70 }}>
           BookWeaver
         </span>
       </div>

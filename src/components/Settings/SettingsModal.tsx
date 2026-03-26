@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { Modal, Form, Input, Select, InputNumber, Button, Space, Divider, message } from 'antd'
-import { SettingOutlined, SaveOutlined } from '@ant-design/icons'
+import { Modal, Form, Input, Select, InputNumber, Button, Space, Divider, message, Tag } from 'antd'
+import { SettingOutlined, SaveOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined } from '@ant-design/icons'
 
 interface SettingsModalProps {
   open: boolean
@@ -32,11 +32,30 @@ const LLM_MODELS = [
   { label: 'GPT-4o', value: 'gpt-4o' },
   { label: 'GPT-4o Mini', value: 'gpt-4o-mini' },
   { label: 'Claude 3.5 Sonnet', value: 'claude-3-5-sonnet-20241022' },
+  { label: 'Claude 3.5 Haiku', value: 'claude-3-5-haiku-20241022' },
+  { label: 'DeepSeek V3', value: 'deepseek-chat' },
+  { label: 'DeepSeek R1', value: 'deepseek-reasoner' },
 ]
+
+const DEFAULT_CONFIG: Config = {
+  llm: {
+    apiKey: '',
+    model: 'qwen3.5-plus',
+    baseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
+    temperature: 0.7,
+    maxTokens: 2000
+  },
+  download: {
+    concurrent: 3,
+    timeout: 30
+  }
+}
 
 export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [form] = Form.useForm()
   const [loading, setLoading] = useState(false)
+  const [testingApi, setTestingApi] = useState(false)
+  const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle')
 
   // 加载配置
   useEffect(() => {
@@ -49,10 +68,24 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     try {
       const config = await window.electronAPI.getConfig()
       if (config) {
-        form.setFieldsValue(config)
+        // 合并默认值，确保所有字段都有值
+        form.setFieldsValue({
+          llm: {
+            ...DEFAULT_CONFIG.llm,
+            ...config.llm
+          },
+          download: {
+            ...DEFAULT_CONFIG.download,
+            ...config.download
+          }
+        })
+      } else {
+        form.setFieldsValue(DEFAULT_CONFIG)
       }
     } catch (error) {
       console.error('加载配置失败:', error)
+      // 使用默认值
+      form.setFieldsValue(DEFAULT_CONFIG)
     }
   }
 
@@ -68,6 +101,42 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       console.error(error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // 测试 API 连接
+  const handleTestApi = async () => {
+    try {
+      const values = await form.validateFields(['llm.apiKey', 'llm.baseUrl', 'llm.model'])
+      setTestingApi(true)
+      setTestStatus('idle')
+
+      const config = {
+        apiKey: values.llm.apiKey,
+        baseUrl: values.llm.baseUrl,
+        model: values.llm.model
+      }
+
+      const response = await fetch('/api/chat/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      })
+
+      const result = await response.json()
+
+      if (response.ok && result.success) {
+        setTestStatus('success')
+        message.success('API 连接测试成功！')
+      } else {
+        setTestStatus('error')
+        message.error(`API 连接失败：${result.error || '未知错误'}`)
+      }
+    } catch (error: any) {
+      setTestStatus('error')
+      message.error(`API 连接失败：${error.message || '请检查 API Key 和 URL 是否正确'}`)
+    } finally {
+      setTestingApi(false)
     }
   }
 
@@ -98,6 +167,14 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           name={['llm', 'apiKey']}
           label="API Key"
           rules={[{ required: true, message: '请输入 API Key' }]}
+          extra={
+            <Space>
+              <span style={{ fontSize: 12, color: '#666' }}>
+                 DashScope 请使用兼容模式 URL
+              </span>
+              <Tag color="blue">兼容模式</Tag>
+            </Space>
+          }
         >
           <Input.Password placeholder="输入您的 LLM API Key" />
         </Form.Item>
@@ -106,8 +183,28 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
           name={['llm', 'baseUrl']}
           label="API Base URL"
           rules={[{ required: true, message: '请输入 API Base URL' }]}
+          extra={
+            <Space wrap>
+              <span style={{ fontSize: 12, color: '#999' }}>
+                阿里云百炼 Coding：https://coding.dashscope.aliyuncs.com/v1
+              </span>
+            </Space>
+          }
         >
-          <Input placeholder="例如: https://dashscope.aliyuncs.com/compatible-mode/v1" />
+          <Input
+            placeholder="例如：https://coding.dashscope.aliyuncs.com/v1"
+            addonAfter={
+              <Button
+                type="link"
+                size="small"
+                onClick={handleTestApi}
+                loading={testingApi}
+                disabled={!form.getFieldValue(['llm', 'apiKey'])}
+              >
+                测试连接
+              </Button>
+            }
+          />
         </Form.Item>
 
         <Form.Item

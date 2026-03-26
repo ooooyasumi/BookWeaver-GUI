@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Layout, Typography, Button, Space } from 'antd'
-import { SettingOutlined } from '@ant-design/icons'
+import { SettingOutlined, FolderOutlined } from '@ant-design/icons'
 import { Sidebar } from './Sidebar'
 import { SearchPage } from '../Search/SearchPage'
 import { DownloadPage } from '../Download/DownloadPage'
@@ -35,20 +35,27 @@ export function AppLayout() {
       </Sider>
       <Layout>
         <Header
+          className="title-bar"
           style={{
             background: '#fff',
-            padding: '0 24px',
+            padding: '0 16px',
             height: 48,
-            lineHeight: '48px',
             borderBottom: '1px solid #f0f0f0',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between'
           }}
         >
+          {/* 左侧留出 macOS 红黄绿按钮的空间 */}
+          <div style={{ width: 70, flexShrink: 0 }} />
+
+          {/* 中间显示工作区路径 */}
           <Text strong style={{ fontSize: 14 }}>
-            {workspacePath}
+            <FolderOutlined style={{ marginRight: 8 }} />
+            {workspacePath ? workspacePath.split('/').pop() : 'BookWeaver'}
           </Text>
+
+          {/* 右侧设置按钮 */}
           <Button
             type="text"
             icon={<SettingOutlined />}

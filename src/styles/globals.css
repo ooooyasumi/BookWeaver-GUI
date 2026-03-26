@@ -115,8 +115,20 @@ body {
 /* 标题栏拖拽区域 (macOS) */
 .title-bar {
   -webkit-app-region: drag;
+  cursor: move;
 }
 
-.title-bar button {
+/* 标题栏内可交互元素 */
+.title-bar button,
+.title-bar input,
+.title-bar a,
+.title-bar [role="button"] {
   -webkit-app-region: no-drag;
+  cursor: pointer;
+}
+
+/* 拖拽区域 - 仅在需要明确拖拽时使用 */
+.drag-region {
+  -webkit-app-region: drag;
+  cursor: move;
 }

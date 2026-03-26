@@ -162,7 +162,7 @@ def search_books(
 
     Args:
         catalog: 目录列表
-        title: 书名
+        title: 书名或关键词（可选，如果为空则返回热门书籍）
         author: 作者
         language: 语言代码
         limit: 返回数量限制
@@ -171,6 +171,15 @@ def search_books(
         匹配的书籍列表
     """
     from .matcher import match_title, match_author
+
+    # 如果 title 和 author 都为空，返回热门书籍
+    if not title and not author:
+        return get_popular_books(catalog, limit=limit)
+
+    # 如果是通用关键词，也返回热门书籍
+    generic_keywords = ["classic", "popular", "best", "fiction", "novel", "recommended"]
+    if title and title.lower() in generic_keywords:
+        return get_popular_books(catalog, limit=limit)
 
     results = []
 
@@ -233,6 +242,74 @@ def get_cache_status() -> dict:
         "lastUpdate": None,
         "totalBooks": 0
     }
+
+
+def get_popular_books(catalog: list[dict], limit: int = 10) -> list[dict]:
+    """
+    获取热门/经典书籍.
+
+    返回 Gutenberg 目录中的经典文学作品。
+    这些书籍通常是公共领域中最受欢迎的作品。
+
+    Args:
+        catalog: 目录列表
+        limit: 返回数量限制
+
+    Returns:
+        热门书籍列表
+    """
+    # 经典作者列表（公共领域中最受欢迎的作者）
+    classic_authors = [
+        "shakespeare", "austen", "dickens", "twain", "doyle",
+        "tolstoy", "dostoevsky", "bronte", "wilde", "orwell",
+        "kafka", "hugo", "verne", "wells", "stevenson"
+    ]
+
+    # 经典书名关键词
+    classic_keywords = [
+        "pride", "prejudice", "great", "expectations", "adventure",
+        "sherlock", "holmes", "alice", "wonderland", "wizard", "oz",
+        "frankenstein", "dracula", "jekyll", "hyde", "time", "machine",
+        "war", "peace", "crime", "punishment", "brothers", "karamazov"
+    ]
+
+    results = []
+
+    for book in catalog:
+        score = 0
+        title_lower = book.get("title", "").lower()
+        author_lower = book.get("author", "").lower()
+
+        # 检查是否是经典作者
+        for author in classic_authors:
+            if author in author_lower:
+                score += 10
+                break
+
+        # 检查是否是经典书名
+        for keyword in classic_keywords:
+            if keyword in title_lower:
+                score += 5
+                break
+
+        # 英语经典文学作品优先
+        if book.get("language") == "en" and score > 0:
+            score += 2
+
+        if score > 0:
+            results.append({
+                "id": book["id"],
+                "title": book["title"],
+                "author": book["author"],
+                "language": book["language"],
+                "matchScore": score,
+                "formats": book.get("formats", {})
+            })
+
+    # 按评分排序
+    results.sort(key=lambda x: x["matchScore"], reverse=True)
+
+    return results[:limit]
 
 
 def refresh_catalog_cache() -> None:

@@ -122,6 +122,13 @@ def match_title(
     input_norm = normalize_title(input_title)
     catalog_norm = normalize_title(catalog_title)
 
+    # 处理通用关键词：classic, popular, best, fiction 等
+    # 这些词应该匹配所有书籍，返回高置信度
+    generic_keywords = ["classic", "popular", "best", "fiction", "novel", "adventure", "science", "history"]
+    if input_norm in generic_keywords:
+        # 对于通用关键词，返回一个基础评分，让所有书籍都能匹配
+        return True, 50.0
+
     # 计算相似度
     score = fuzz.token_sort_ratio(input_norm, catalog_norm)
 
