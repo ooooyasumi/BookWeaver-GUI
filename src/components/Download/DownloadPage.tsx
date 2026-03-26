@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react'
-import { Tabs, Table, Button, Progress, Space, message, Card, Typography, Tag, Empty, List, Collapse } from 'antd'
+import React, { useState } from 'react'
+import { Tabs, Button, Progress, Space, message, Card, Typography, Empty, Tag, Collapse } from 'antd'
 import { PlayCircleOutlined, DeleteOutlined, FolderOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
 import { useWorkspace, PendingBook, Batch, DownloadResult } from '../../contexts/WorkspaceContext'
+import { BookList } from '../Common/BookList'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 const { Panel } = Collapse
 
 export function DownloadPage() {
@@ -51,13 +51,12 @@ export function DownloadPage() {
 
     addBatch(newBatch)
     setCurrentBatchId(batchId)
-    setCurrentDownloadBooks(selectedBooks) // 保存当前下载书籍
+    setCurrentDownloadBooks(selectedBooks)
     setDownloading(true)
     setDownloadProgress({})
     setActiveTab('downloading')
 
     try {
-      // 调用后端下载 API（SSE）
       const response = await fetch('/api/download/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -80,13 +79,11 @@ export function DownloadPage() {
             const event = JSON.parse(chunk)
 
             if (event.type === 'progress') {
-              // 更新单本书进度
               setDownloadProgress(prev => ({
                 ...prev,
                 [event.bookId]: event.progress
               }))
             } else if (event.type === 'complete') {
-              // 下载完成，更新批次信息
               updateBatch(batchId, {
                 status: 'completed',
                 success: event.success,
@@ -100,7 +97,6 @@ export function DownloadPage() {
         }
       }
 
-      // 从预下载列表移除已下载的书籍
       removeFromPending(selectedBooks.map(b => b.id))
       message.success('下载完成')
     } catch (error) {
@@ -116,46 +112,10 @@ export function DownloadPage() {
     }
   }
 
-  // 预下载表格列
-  const pendingColumns: ColumnsType<PendingBook> = [
-    {
-      title: '书名',
-      dataIndex: 'title',
-      key: 'title',
-      ellipsis: true
-    },
-    {
-      title: '作者',
-      dataIndex: 'author',
-      key: 'author',
-      width: 200,
-      ellipsis: true
-    },
-    {
-      title: '语言',
-      dataIndex: 'language',
-      key: 'language',
-      width: 80
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 80,
-      render: (_, record) => (
-        <Button
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => removeFromPending([record.id])}
-        />
-      )
-    }
-  ]
-
   // 渲染预下载标签
   const renderPendingTab = () => (
     <div>
-      <div style={{ marginBottom: 16 }}>
+      <Card className="card" style={{ marginBottom: 24 }}>
         <Space>
           <Button
             type="primary"
@@ -163,6 +123,7 @@ export function DownloadPage() {
             onClick={handleStartDownload}
             disabled={pendingBooks.filter(b => b.selected).length === 0}
             loading={downloading}
+            size="large"
           >
             开始下载
           </Button>
@@ -170,22 +131,19 @@ export function DownloadPage() {
             已选 {pendingBooks.filter(b => b.selected).length} / {pendingBooks.length} 本
           </Text>
         </Space>
-      </div>
+      </Card>
 
-      <Table
-        columns={pendingColumns}
-        dataSource={pendingBooks}
-        rowKey="id"
-        rowSelection={{
-          selectedRowKeys: pendingBooks.filter(b => b.selected).map(b => b.id),
-          onChange: (keys) => {
-            pendingBooks.forEach(b => {
-              updatePendingSelection(b.id, keys.includes(b.id))
-            })
-          }
+      <BookList
+        type="download"
+        data={pendingBooks}
+        selectedRowKeys={pendingBooks.filter(b => b.selected).map(b => b.id)}
+        onSelectionChange={(keys) => {
+          pendingBooks.forEach(b => {
+            updatePendingSelection(b.id, keys.includes(b.id))
+          })
         }}
-        pagination={false}
-        locale={{ emptyText: <Empty description="暂无待下载书籍" /> }}
+        onRemove={(id) => removeFromPending([id])}
+        emptyDescription="暂无待下载书籍"
       />
     </div>
   )
@@ -193,36 +151,39 @@ export function DownloadPage() {
   // 渲染下载中标签
   const renderDownloadingTab = () => {
     if (!downloading || currentDownloadBooks.length === 0) {
-      return <Empty description="暂无下载任务" />
+      return (
+        <div style={{ padding: 60, textAlign: 'center' }}>
+          <Empty description="暂无下载任务" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        </div>
+      )
     }
 
-    const currentBatch = batches.find(b => b.id === currentBatchId)
     const totalProgress = currentDownloadBooks.length > 0
       ? Object.values(downloadProgress).reduce((a, b) => a + b, 0) / currentDownloadBooks.length
       : 0
 
     return (
       <div>
-        <Card style={{ marginBottom: 16 }}>
-          <Text>整体进度</Text>
-          <Progress percent={Math.round(totalProgress)} />
+        <Card className="card" style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text strong>整体进度</Text>
+            <Tag color="blue">{currentDownloadBooks.length} 本书</Tag>
+          </div>
+          <Progress
+            percent={Math.round(totalProgress)}
+            strokeColor={{
+              '0%': '#108ee9',
+              '100%': '#87d068'
+            }}
+            style={{ marginTop: 12 }}
+          />
         </Card>
 
-        <List
-          dataSource={currentDownloadBooks}
-          renderItem={book => (
-            <List.Item>
-              <List.Item.Meta
-                title={book.title}
-                description={book.author}
-              />
-              <Progress
-                percent={downloadProgress[book.id] || 0}
-                status={downloadProgress[book.id] === 100 ? 'success' : 'active'}
-                style={{ width: 200 }}
-              />
-            </List.Item>
-          )}
+        <BookList
+          type="downloading"
+          data={currentDownloadBooks}
+          downloadProgress={downloadProgress}
+          emptyDescription="暂无下载任务"
         />
       </div>
     )
@@ -231,39 +192,43 @@ export function DownloadPage() {
   // 渲染已完成标签
   const renderCompletedTab = () => {
     if (batches.length === 0) {
-      return <Empty description="暂无下载记录" />
+      return (
+        <div style={{ padding: 60, textAlign: 'center' }}>
+          <Empty description="暂无下载记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        </div>
+      )
     }
 
     return (
-      <Collapse accordion>
+      <Collapse
+        accordion
+        bordered={false}
+        style={{ background: 'transparent' }}
+      >
         {batches.map(batch => (
           <Panel
             key={batch.id}
             header={
-              <Space>
-                <FolderOutlined />
-                <Text strong>{batch.name}</Text>
-                <Text type="secondary">({batch.createdAt.split('T')[0]})</Text>
-                <Tag color="green">成功 {batch.success}</Tag>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <FolderOutlined style={{ color: 'var(--accent-color)' }} />
+                <Text strong style={{ fontSize: 15 }}>{batch.name}</Text>
+                <Text type="secondary" style={{ fontSize: 13 }}>{batch.createdAt.split('T')[0]}</Text>
+                <Tag color="green" style={{ marginLeft: 8 }}>成功 {batch.success}</Tag>
                 {batch.failed > 0 && <Tag color="red">失败 {batch.failed}</Tag>}
-              </Space>
+              </div>
             }
+            style={{
+              marginBottom: 12,
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 12
+            }}
           >
-            <List
-              dataSource={batch.results}
-              renderItem={(result: DownloadResult) => (
-                <List.Item>
-                  <List.Item.Meta
-                    avatar={
-                      result.success
-                        ? <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 20 }} />
-                        : <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 20 }} />
-                    }
-                    title={result.title}
-                    description={result.success ? result.filePath : result.error}
-                  />
-                </List.Item>
-              )}
+            <BookList
+              type="completed"
+              data={batch.results}
+              batchResults={batch.results}
+              emptyDescription="本批次无数据"
             />
           </Panel>
         ))}
@@ -290,11 +255,12 @@ export function DownloadPage() {
   ]
 
   return (
-    <div className="page-card">
+    <div>
       <Tabs
         activeKey={activeTab}
         onChange={setActiveTab}
         items={tabItems}
+        size="large"
       />
     </div>
   )

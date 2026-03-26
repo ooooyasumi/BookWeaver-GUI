@@ -17,7 +17,7 @@ export function WelcomePage() {
       const path = await window.electronAPI.openFolder()
       if (path) {
         await openWorkspace(path)
-        message.success(`已打开工作区: ${path}`)
+        message.success(`已打开工作区：${path}`)
       }
     } catch (error) {
       message.error('打开工作区失败')
@@ -45,11 +45,10 @@ export function WelcomePage() {
     const files = e.dataTransfer.files
     if (files.length > 0) {
       const item = files[0]
-      // 检查是否是文件夹
       if (item.path) {
         try {
           await openWorkspace(item.path)
-          message.success(`已打开工作区: ${item.path}`)
+          message.success(`已打开工作区：${item.path}`)
         } catch (error) {
           message.error('打开工作区失败')
           console.error(error)
@@ -68,23 +67,24 @@ export function WelcomePage() {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        background: '#f0f2f5'
+        background: 'var(--bg-primary)'
       }}
     >
       {/* 顶部拖动区域 */}
       <div
-        className="drag-region"
+        className="title-bar-drag"
         style={{
           height: 48,
           flex: '0 0 48px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          background: '#fff',
-          borderBottom: '1px solid #f0f0f0'
+          justifyContent: 'flex-start',
+          paddingLeft: 24,
+          background: 'var(--sidebar-bg)',
+          borderBottom: '1px solid rgba(255,255,255,0.05)'
         }}
       >
-        <Text strong style={{ fontSize: 14, marginLeft: 70 }}>BookWeaver</Text>
+        <Text strong style={{ fontSize: 16, color: '#fff', letterSpacing: '-0.5px' }}>BookWeaver</Text>
       </div>
 
       {/* 主内容区 */}
@@ -95,45 +95,73 @@ export function WelcomePage() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          overflow: 'auto'
+          overflow: 'auto',
+          padding: 24
         }}
       >
         <Space direction="vertical" size="large" align="center">
           <div style={{ textAlign: 'center' }}>
-            <Title level={2}>BookWeaver</Title>
+            <Title level={1} style={{ marginBottom: 8, fontSize: 36, fontWeight: 600 }}>
+              BookWeaver
+            </Title>
             <Space direction="vertical" size="small">
-              <Text type="secondary">Project Gutenberg 书籍下载工具</Text>
-              <Tag color="blue">v{APP_VERSION}</Tag>
+              <Text type="secondary" style={{ fontSize: 15 }}>
+                Project Gutenberg 书籍下载工具
+              </Text>
+              <Tag color="blue" style={{ fontSize: 12, padding: '2px 12px' }}>
+                v{APP_VERSION}
+              </Tag>
             </Space>
           </div>
 
           <div
             style={{
-              padding: '48px 64px',
-              border: '2px dashed #d9d9d9',
-              borderRadius: 8,
-              background: isDragging ? 'rgba(24, 144, 255, 0.05)' : '#fff',
+              padding: '56px 72px',
+              border: '2px dashed var(--border-color)',
+              borderRadius: 16,
+              background: 'var(--bg-secondary)',
               textAlign: 'center',
-              transition: 'all 0.3s',
-              borderColor: isDragging ? '#1890ff' : '#d9d9d9'
+              transition: 'all 0.3s ease',
+              borderColor: isDragging ? 'var(--accent-color)' : 'var(--border-color)',
+              boxShadow: isDragging ? '0 4px 24px rgba(0,122,255,0.15)' : 'var(--card-shadow)'
             }}
           >
-            <Space direction="vertical" size="middle">
-              <FolderAddOutlined style={{ fontSize: 48, color: '#1890ff' }} />
-              <Text>拖拽文件夹到此处，或点击下方按钮选择工作区</Text>
+            <Space direction="vertical" size="large" align="center">
+              <FolderAddOutlined
+                style={{
+                  fontSize: 56,
+                  color: 'var(--accent-color)',
+                  transition: 'transform 0.3s ease',
+                  transform: isDragging ? 'scale(1.1)' : 'scale(1)'
+                }}
+              />
+              <div>
+                <Text style={{ fontSize: 15, display: 'block', marginBottom: 8 }}>
+                  拖拽文件夹到此处
+                </Text>
+                <Text type="secondary" style={{ fontSize: 13 }}>
+                  或点击下方按钮选择工作区
+                </Text>
+              </div>
               <Button
                 type="primary"
                 size="large"
                 icon={<FolderOpenOutlined />}
                 onClick={handleOpenFolder}
                 loading={isLoading}
+                style={{
+                  borderRadius: 10,
+                  padding: '12px 32px',
+                  fontSize: 15,
+                  height: 48
+                }}
               >
                 打开工作区
               </Button>
             </Space>
           </div>
 
-          <Text type="secondary" style={{ fontSize: 12 }}>
+          <Text type="secondary" style={{ fontSize: 13 }}>
             工作区将用于存储下载的书籍和配置数据
           </Text>
         </Space>

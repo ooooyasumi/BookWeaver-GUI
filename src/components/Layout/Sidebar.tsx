@@ -31,17 +31,18 @@ export function Sidebar() {
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       <div
-        className="drag-region"
+        className="title-bar-drag"
         style={{
           height: 48,
           flex: '0 0 48px',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          borderBottom: '1px solid rgba(255,255,255,0.1)'
+          justifyContent: 'flex-start',
+          paddingLeft: 24,
+          borderBottom: '1px solid rgba(255,255,255,0.05)'
         }}
       >
-        <span style={{ color: '#fff', fontSize: 16, fontWeight: 'bold', marginLeft: 70 }}>
+        <span style={{ color: '#fff', fontSize: 18, fontWeight: 600, letterSpacing: '-0.5px' }}>
           BookWeaver
         </span>
       </div>
@@ -51,17 +52,29 @@ export function Sidebar() {
         selectedKeys={[currentPage]}
         items={menuItems}
         onClick={handleMenuClick}
-        style={{ flex: 1, border: 'none' }}
+        style={{
+          flex: 1,
+          border: 'none',
+          background: 'transparent',
+          paddingTop: 16
+        }}
+        itemStyle={{
+          marginBottom: 4,
+          borderRadius: 8,
+          margin: '4px 12px',
+          padding: '12px 16px'
+        }}
       />
       <div
         style={{
-          padding: '12px 16px',
-          borderTop: '1px solid rgba(255,255,255,0.1)',
-          color: 'rgba(255,255,255,0.45)',
-          fontSize: 12
+          padding: '16px 24px',
+          borderTop: '1px solid rgba(255,255,255,0.05)',
+          color: 'rgba(255,255,255,0.35)',
+          fontSize: 12,
+          fontWeight: 500
         }}
       >
-        v1.0.0
+        v0.1.1
       </div>
     </div>
   )

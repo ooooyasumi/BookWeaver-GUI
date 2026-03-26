@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { Input, Button, Table, Space, message, Checkbox, FloatButton, Modal, Drawer, Spin, Tag } from 'antd'
+import React, { useState } from 'react'
+import { Input, Button, Space, message, Checkbox, FloatButton, Drawer, Tag, Card } from 'antd'
 import { SearchOutlined, RobotOutlined, SendOutlined, PlusOutlined } from '@ant-design/icons'
-import type { ColumnsType } from 'antd/es/table'
 import { useWorkspace, PendingBook } from '../../contexts/WorkspaceContext'
+import { BookList } from '../Common/BookList'
 
 interface BookResult {
   id: number
@@ -54,7 +54,7 @@ export function SearchPage() {
     setLoading(true)
     try {
       const response = await fetch(
-        `/api/books/search?title=${encodeURIComponent(searchTitle)}&author=${encodeURIComponent(searchAuthor)}&limit=20`
+        `/api/books/search?title=${encodeURIComponent(searchTitle)}&author=${encodeURIComponent(searchAuthor)}&limit=100`
       )
       const data = await response.json()
       setSearchResults(data.results || [])
@@ -199,80 +199,42 @@ export function SearchPage() {
     }
   }
 
-  // 表格列定义
-  const columns: ColumnsType<BookResult> = [
-    {
-      title: '书名',
-      dataIndex: 'title',
-      key: 'title',
-      ellipsis: true
-    },
-    {
-      title: '作者',
-      dataIndex: 'author',
-      key: 'author',
-      width: 200,
-      ellipsis: true
-    },
-    {
-      title: '语言',
-      dataIndex: 'language',
-      key: 'language',
-      width: 80
-    },
-    {
-      title: '匹配度',
-      dataIndex: 'matchScore',
-      key: 'matchScore',
-      width: 100,
-      render: (score: number) => (
-        <Tag color={score >= 80 ? 'green' : score >= 60 ? 'orange' : 'default'}>
-          {score}%
-        </Tag>
-      )
-    }
-  ]
-
-  const rowSelection = {
-    selectedRowKeys,
-    onChange: (newSelectedRowKeys: React.Key[]) => {
-      setSelectedRowKeys(newSelectedRowKeys)
-    }
-  }
-
   return (
-    <div className="page-card">
-      {/* 搜索栏 */}
-      <div className="search-bar">
+    <div>
+      {/* 搜索卡片 */}
+      <Card className="card" style={{ marginBottom: 24 }}>
         <Space.Compact style={{ width: '100%' }}>
           <Input
             placeholder="书名"
             value={searchTitle}
             onChange={e => setSearchTitle(e.target.value)}
             onPressEnter={handleSearch}
-            style={{ width: '40%' }}
+            style={{ width: '25%' }}
+            size="large"
           />
           <Input
             placeholder="作者"
             value={searchAuthor}
             onChange={e => setSearchAuthor(e.target.value)}
             onPressEnter={handleSearch}
-            style={{ width: '40%' }}
+            style={{ width: '25%' }}
+            size="large"
           />
           <Button
             type="primary"
             icon={<SearchOutlined />}
             onClick={handleSearch}
             loading={loading}
+            size="large"
           >
             搜索
           </Button>
         </Space.Compact>
-      </div>
+      </Card>
 
       {/* 操作栏 */}
       {searchResults.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
+        <Card className="card" style={{ marginBottom: 24 }}>
           <Space>
             <Checkbox
               checked={selectedRowKeys.length === searchResults.length && searchResults.length > 0}
@@ -287,7 +249,9 @@ export function SearchPage() {
             >
               全选
             </Checkbox>
-            <span>已选 {selectedRowKeys.length} 本</span>
+            <span style={{ color: 'var(--text-secondary)' }}>
+              已选 {selectedRowKeys.length} 本
+            </span>
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -297,23 +261,16 @@ export function SearchPage() {
               预下载
             </Button>
           </Space>
-        </div>
+        </Card>
       )}
 
-      {/* 搜索结果表格 */}
-      <Table
-        className="book-table"
-        columns={columns}
-        dataSource={searchResults}
-        rowKey="id"
-        rowSelection={rowSelection}
+      {/* 搜索结果列表 */}
+      <BookList
+        type="search"
+        data={searchResults}
         loading={loading}
-        pagination={{
-          pageSize: 10,
-          showSizeChanger: false,
-          showTotal: (total) => `共 ${total} 条`
-        }}
-        locale={{ emptyText: '输入书名或作者进行搜索' }}
+        selectedRowKeys={selectedRowKeys as number[]}
+        onSelectionChange={(keys) => setSelectedRowKeys(keys)}
       />
 
       {/* AI 悬浮按钮 */}
@@ -322,19 +279,23 @@ export function SearchPage() {
         type="primary"
         onClick={() => setAiDrawerOpen(true)}
         tooltip="AI 助手"
+        style={{ right: 32, bottom: 32 }}
       />
 
       {/* AI 对话抽屉 */}
       <Drawer
         title="AI 助手"
         placement="right"
-        width={400}
+        width={420}
         open={aiDrawerOpen}
         onClose={() => setAiDrawerOpen(false)}
+        styles={{
+          body: { padding: 0, display: 'flex', flexDirection: 'column' }
+        }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           {/* 消息列表 */}
-          <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
             {aiMessages.map((msg, idx) => (
               <div
                 key={idx}
@@ -344,46 +305,49 @@ export function SearchPage() {
                 }}
               >
                 <div
+                  className={msg.role === 'user' ? 'ai-message-user' : msg.type === 'tool_status' ? 'ai-message-tool-status' : msg.type === 'tool_result' ? 'ai-message-tool-result' : 'ai-message-assistant'}
                   style={{
                     display: 'inline-block',
-                    padding: '8px 12px',
-                    borderRadius: 8,
-                    background: msg.type === 'tool_status' ? '#e6f7ff' : msg.type === 'tool_result' ? '#f6ffed' : msg.role === 'user' ? '#1890ff' : '#f0f0f0',
-                    color: msg.role === 'user' ? '#fff' : '#000',
-                    maxWidth: '80%',
+                    padding: '10px 14px',
+                    borderRadius: 16,
+                    maxWidth: '85%',
                     wordBreak: 'break-word',
-                    border: msg.type === 'tool_status' ? '1px dashed #1890ff' : msg.type === 'tool_result' ? '1px solid #b7eb8f' : 'none'
+                    fontSize: 14,
+                    lineHeight: 1.5
                   }}
                 >
-                  {msg.type === 'tool_status' && <Spin size="small" style={{ marginRight: 8 }} />}
                   {msg.content}
                 </div>
               </div>
             ))}
             {aiLoading && (
-              <div style={{ textAlign: 'center' }}>
-                <Spin size="small" />
+              <div style={{ textAlign: 'center', padding: 12 }}>
+                <span style={{ color: 'var(--text-tertiary)', fontSize: 13 }}>AI 正在思考...</span>
               </div>
             )}
           </div>
 
           {/* 输入框 */}
-          <Space.Compact style={{ width: '100%' }}>
-            <Input
-              placeholder="输入消息..."
-              value={aiInput}
-              onChange={e => setAiInput(e.target.value)}
-              onPressEnter={handleAiSend}
-              disabled={aiLoading}
-            />
-            <Button
-              type="primary"
-              icon={<SendOutlined />}
-              onClick={handleAiSend}
-              loading={aiLoading}
-              disabled={!aiInput.trim()}
-            />
-          </Space.Compact>
+          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)' }}>
+            <Space.Compact style={{ width: '100%' }}>
+              <Input
+                placeholder="输入消息..."
+                value={aiInput}
+                onChange={e => setAiInput(e.target.value)}
+                onPressEnter={handleAiSend}
+                disabled={aiLoading}
+                size="large"
+              />
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={handleAiSend}
+                loading={aiLoading}
+                disabled={!aiInput.trim()}
+                size="large"
+              />
+            </Space.Compact>
+          </div>
         </div>
       </Drawer>
     </div>

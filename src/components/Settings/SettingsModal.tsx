@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Modal, Form, Input, Select, InputNumber, Button, Space, Divider, message, Tag } from 'antd'
-import { SettingOutlined, SaveOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined } from '@ant-design/icons'
+import { Modal, Form, Input, Select, InputNumber, Button, Space, Divider, message, Tag, Switch, Row, Col } from 'antd'
+import { SettingOutlined, SaveOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, MoonOutlined } from '@ant-design/icons'
+import { useTheme } from '../../contexts/ThemeContext'
 
 interface SettingsModalProps {
   open: boolean
@@ -56,6 +57,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [loading, setLoading] = useState(false)
   const [testingApi, setTestingApi] = useState(false)
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const { theme, toggleTheme, isDark } = useTheme()
 
   // 加载配置
   useEffect(() => {
@@ -68,7 +70,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     try {
       const config = await window.electronAPI.getConfig()
       if (config) {
-        // 合并默认值，确保所有字段都有值
         form.setFieldsValue({
           llm: {
             ...DEFAULT_CONFIG.llm,
@@ -84,7 +85,6 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       }
     } catch (error) {
       console.error('加载配置失败:', error)
-      // 使用默认值
       form.setFieldsValue(DEFAULT_CONFIG)
     }
   }
@@ -145,110 +145,176 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       title={
         <Space>
           <SettingOutlined />
-          设置
+          <span style={{ fontSize: 16, fontWeight: 600 }}>设置</span>
         </Space>
       }
       open={open}
       onCancel={onClose}
-      width={600}
-      footer={[
-        <Button key="cancel" onClick={onClose}>
+      width={640}
+      footer={null}
+      styles={{
+        body: { padding: '24px 0' }
+      }}
+    >
+      <div style={{ padding: '0 24px' }}>
+        {/* 外观设置 */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            外观
+          </div>
+          <Row align="middle" justify="space-between">
+            <Col>
+              <Space>
+                <MoonOutlined style={{ color: 'var(--text-secondary)' }} />
+                <span>深色模式</span>
+              </Space>
+            </Col>
+            <Col>
+              <Switch
+                checked={isDark}
+                onChange={toggleTheme}
+                checkedChildren="开"
+                unCheckedChildren="关"
+              />
+            </Col>
+          </Row>
+        </div>
+
+        <Divider style={{ margin: '16px 0 20px' }} />
+
+        {/* LLM 配置 */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            LLM 配置
+          </div>
+          <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
+            <Form.Item
+              name={['llm', 'apiKey']}
+              label="API Key"
+              rules={[{ required: true, message: '请输入 API Key' }]}
+              style={{ marginBottom: 20 }}
+            >
+              <Input.Password placeholder="输入您的 LLM API Key" size="large" />
+            </Form.Item>
+
+            <Form.Item
+              name={['llm', 'baseUrl']}
+              label="API Base URL"
+              rules={[{ required: true, message: '请输入 API Base URL' }]}
+              style={{ marginBottom: 20 }}
+              extra={
+                <Tag color="blue" style={{ fontSize: 11 }}>
+                  兼容模式
+                </Tag>
+              }
+            >
+              <Input
+                placeholder="https://coding.dashscope.aliyuncs.com/v1"
+                size="large"
+                addonAfter={
+                  <Button
+                    type="primary"
+                    size="small"
+                    onClick={handleTestApi}
+                    loading={testingApi}
+                    disabled={!form.getFieldValue(['llm', 'apiKey'])}
+                    icon={testStatus === 'success' ? <CheckCircleOutlined /> : testStatus === 'error' ? <CloseCircleOutlined /> : <SyncOutlined />}
+                  >
+                    {testStatus === 'success' ? '成功' : testStatus === 'error' ? '失败' : '测试'}
+                  </Button>
+                }
+              />
+            </Form.Item>
+
+            <Form.Item
+              name={['llm', 'model']}
+              label="模型"
+              rules={[{ required: true, message: '请选择模型' }]}
+              style={{ marginBottom: 20 }}
+            >
+              <Select placeholder="选择 LLM 模型" options={LLM_MODELS} size="large" />
+            </Form.Item>
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name={['llm', 'temperature']}
+                  label="Temperature"
+                  tooltip="控制输出的随机性"
+                  style={{ marginBottom: 0 }}
+                >
+                  <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} size="large" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name={['llm', 'maxTokens']}
+                  label="Max Tokens"
+                  tooltip="最大输出长度"
+                  style={{ marginBottom: 0 }}
+                >
+                  <InputNumber min={100} max={8000} step={100} style={{ width: '100%' }} size="large" />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        </div>
+
+        <Divider style={{ margin: '16px 0 20px' }} />
+
+        {/* 下载配置 */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            下载配置
+          </div>
+          <Form form={form} layout="vertical" style={{ marginTop: 8 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name={['download', 'concurrent']}
+                  label="并发数"
+                  style={{ marginBottom: 0 }}
+                >
+                  <InputNumber min={1} max={10} style={{ width: '100%' }} size="large" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name={['download', 'timeout']}
+                  label="超时时间 (秒)"
+                  style={{ marginBottom: 0 }}
+                >
+                  <InputNumber min={10} max={120} style={{ width: '100%' }} size="large" />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        </div>
+      </div>
+
+      {/* 底部按钮 */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: 12,
+        padding: '16px 24px 0',
+        borderTop: '1px solid var(--border-color)',
+        marginTop: 16
+      }}>
+        <Button size="large" onClick={onClose}>
           取消
-        </Button>,
-        <Button key="save" type="primary" icon={<SaveOutlined />} loading={loading} onClick={handleSave}>
+        </Button>
+        <Button
+          type="primary"
+          size="large"
+          icon={<SaveOutlined />}
+          loading={loading}
+          onClick={handleSave}
+          style={{ borderRadius: 8, padding: '8px 24px' }}
+        >
           保存
         </Button>
-      ]}
-    >
-      <Form form={form} layout="vertical">
-        <Divider orientation="left">LLM 配置</Divider>
-
-        <Form.Item
-          name={['llm', 'apiKey']}
-          label="API Key"
-          rules={[{ required: true, message: '请输入 API Key' }]}
-          extra={
-            <Space>
-              <span style={{ fontSize: 12, color: '#666' }}>
-                 DashScope 请使用兼容模式 URL
-              </span>
-              <Tag color="blue">兼容模式</Tag>
-            </Space>
-          }
-        >
-          <Input.Password placeholder="输入您的 LLM API Key" />
-        </Form.Item>
-
-        <Form.Item
-          name={['llm', 'baseUrl']}
-          label="API Base URL"
-          rules={[{ required: true, message: '请输入 API Base URL' }]}
-          extra={
-            <Space wrap>
-              <span style={{ fontSize: 12, color: '#999' }}>
-                阿里云百炼 Coding：https://coding.dashscope.aliyuncs.com/v1
-              </span>
-            </Space>
-          }
-        >
-          <Input
-            placeholder="例如：https://coding.dashscope.aliyuncs.com/v1"
-            addonAfter={
-              <Button
-                type="link"
-                size="small"
-                onClick={handleTestApi}
-                loading={testingApi}
-                disabled={!form.getFieldValue(['llm', 'apiKey'])}
-              >
-                测试连接
-              </Button>
-            }
-          />
-        </Form.Item>
-
-        <Form.Item
-          name={['llm', 'model']}
-          label="模型"
-          rules={[{ required: true, message: '请选择模型' }]}
-        >
-          <Select placeholder="选择 LLM 模型" options={LLM_MODELS} />
-        </Form.Item>
-
-        <Form.Item
-          name={['llm', 'temperature']}
-          label="Temperature"
-          tooltip="控制输出的随机性，值越大越随机"
-        >
-          <InputNumber min={0} max={2} step={0.1} style={{ width: '100%' }} />
-        </Form.Item>
-
-        <Form.Item
-          name={['llm', 'maxTokens']}
-          label="Max Tokens"
-          tooltip="控制输出的最大长度"
-        >
-          <InputNumber min={100} max={8000} step={100} style={{ width: '100%' }} />
-        </Form.Item>
-
-        <Divider orientation="left">下载配置</Divider>
-
-        <Form.Item
-          name={['download', 'concurrent']}
-          label="并发数"
-          tooltip="同时下载的书籍数量"
-        >
-          <InputNumber min={1} max={10} style={{ width: '100%' }} />
-        </Form.Item>
-
-        <Form.Item
-          name={['download', 'timeout']}
-          label="超时时间 (秒)"
-          tooltip="单个下载请求的超时时间"
-        >
-          <InputNumber min={10} max={120} style={{ width: '100%' }} />
-        </Form.Item>
-      </Form>
+      </div>
     </Modal>
   )
 }
