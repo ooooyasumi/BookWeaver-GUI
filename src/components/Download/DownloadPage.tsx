@@ -22,6 +22,7 @@ export function DownloadPage() {
   const [downloading, setDownloading] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState<Record<number, number>>({})
   const [currentBatchId, setCurrentBatchId] = useState<number | null>(null)
+  const [currentDownloadBooks, setCurrentDownloadBooks] = useState<PendingBook[]>([])
 
   const pendingBooks = workspaceData?.pendingDownloads || []
   const batches = workspaceData?.batches || []
@@ -50,13 +51,10 @@ export function DownloadPage() {
 
     addBatch(newBatch)
     setCurrentBatchId(batchId)
+    setCurrentDownloadBooks(selectedBooks) // 保存当前下载书籍
     setDownloading(true)
+    setDownloadProgress({})
     setActiveTab('downloading')
-
-    // 初始化进度
-    const progress: Record<number, number> = {}
-    selectedBooks.forEach(b => { progress[b.id] = 0 })
-    setDownloadProgress(progress)
 
     try {
       // 调用后端下载 API（SSE）
@@ -82,11 +80,13 @@ export function DownloadPage() {
             const event = JSON.parse(chunk)
 
             if (event.type === 'progress') {
+              // 更新单本书进度
               setDownloadProgress(prev => ({
                 ...prev,
                 [event.bookId]: event.progress
               }))
             } else if (event.type === 'complete') {
+              // 下载完成，更新批次信息
               updateBatch(batchId, {
                 status: 'completed',
                 success: event.success,
@@ -110,6 +110,7 @@ export function DownloadPage() {
     } finally {
       setDownloading(false)
       setCurrentBatchId(null)
+      setCurrentDownloadBooks([])
       setDownloadProgress({})
       setActiveTab('completed')
     }
@@ -191,13 +192,13 @@ export function DownloadPage() {
 
   // 渲染下载中标签
   const renderDownloadingTab = () => {
-    if (!downloading && !currentBatchId) {
+    if (!downloading || currentDownloadBooks.length === 0) {
       return <Empty description="暂无下载任务" />
     }
 
     const currentBatch = batches.find(b => b.id === currentBatchId)
-    const totalProgress = currentBatch
-      ? Object.values(downloadProgress).reduce((a, b) => a + b, 0) / currentBatch.total
+    const totalProgress = currentDownloadBooks.length > 0
+      ? Object.values(downloadProgress).reduce((a, b) => a + b, 0) / currentDownloadBooks.length
       : 0
 
     return (
@@ -208,7 +209,7 @@ export function DownloadPage() {
         </Card>
 
         <List
-          dataSource={pendingBooks.filter(b => b.selected)}
+          dataSource={currentDownloadBooks}
           renderItem={book => (
             <List.Item>
               <List.Item.Meta

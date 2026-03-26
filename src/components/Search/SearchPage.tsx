@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Input, Button, Table, Space, message, Checkbox, FloatButton, Modal, Drawer, Spin, Tag } from 'antd'
 import { SearchOutlined, RobotOutlined, SendOutlined, PlusOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
@@ -13,8 +13,21 @@ interface BookResult {
 }
 
 interface Message {
-  role: 'user' | 'assistant'
+  role: 'user' | 'assistant' | 'system'
   content: string
+  type?: 'normal' | 'tool_status' | 'tool_result'
+}
+
+interface LLMConfig {
+  apiKey: string
+  model: string
+  baseUrl: string
+  temperature: number
+  maxTokens: number
+}
+
+interface Config {
+  llm: LLMConfig
 }
 
 export function SearchPage() {
@@ -86,29 +99,101 @@ export function SearchPage() {
     setAiLoading(true)
 
     try {
+      // 获取配置
+      const config = await window.electronAPI.getConfig() as Config
+
+      // 检查 API Key 是否配置
+      if (!config?.llm?.apiKey) {
+        message.error('请先在设置中配置 LLM API Key')
+        setAiMessages(prev => [...prev, { role: 'assistant', content: '请先在设置中配置 LLM API Key' }])
+        setAiLoading(false)
+        return
+      }
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: aiInput })
+        body: JSON.stringify({
+          message: aiInput,
+          history: aiMessages,
+          config: config.llm
+        })
       })
+
+      if (!response.ok) {
+        throw new Error('请求失败')
+      }
 
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
       let assistantContent = ''
+      let hasContent = false
+
+      // 先添加一条空的助手消息
+      setAiMessages(prev => [...prev, { role: 'assistant', content: '', type: 'normal' }])
 
       if (reader) {
+        let buffer = ''
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
-          const chunk = decoder.decode(value)
-          assistantContent += chunk
+
+          buffer += decoder.decode(value, { stream: true })
+
+          // 解析 SSE 事件
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || '' // 保留未完成的行
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const event = JSON.parse(line.slice(6))
+
+                if (event.type === 'token') {
+                  hasContent = true
+                  assistantContent += event.content
+                  // 实时更新最后一条消息
+                  setAiMessages(prev => {
+                    const newMessages = [...prev]
+                    const lastIdx = newMessages.length - 1
+                    newMessages[lastIdx] = { role: 'assistant', content: assistantContent, type: 'normal' }
+                    return newMessages
+                  })
+                } else if (event.type === 'tool_status') {
+                  // 工具状态消息 - 显示为加载提示
+                  setAiMessages(prev => [...prev, { role: 'assistant', content: '正在搜索...', type: 'tool_status' }])
+                } else if (event.type === 'add_books') {
+                  // 添加书籍到搜索结果
+                  const books = event.books || []
+                  if (books.length > 0) {
+                    setSearchResults(books)
+                    setSelectedRowKeys([])
+                    // 添加工具执行结果消息
+                    setAiMessages(prev => [...prev, { role: 'assistant', content: `已找到 ${books.length} 本书，请在列表中查看`, type: 'tool_result' }])
+                  }
+                } else if (event.type === 'error') {
+                  message.error(event.content)
+                }
+              } catch {
+                // 忽略解析错误
+              }
+            }
+          }
         }
       }
 
-      setAiMessages(prev => [...prev, { role: 'assistant', content: assistantContent }])
+      // 如果没有收到任何内容，更新最后一条消息
+      if (!hasContent && assistantContent === '') {
+        setAiMessages(prev => {
+          const newMessages = [...prev]
+          newMessages[newMessages.length - 1] = { role: 'assistant', content: '未收到回复，请检查 API Key 是否正确', type: 'normal' }
+          return newMessages
+        })
+      }
     } catch (error) {
       message.error('AI 对话失败')
       console.error(error)
+      setAiMessages(prev => [...prev, { role: 'assistant', content: '对话失败，请检查网络连接和配置' }])
     } finally {
       setAiLoading(false)
     }
@@ -263,10 +348,14 @@ export function SearchPage() {
                     display: 'inline-block',
                     padding: '8px 12px',
                     borderRadius: 8,
-                    background: msg.role === 'user' ? '#1890ff' : '#f0f0f0',
-                    color: msg.role === 'user' ? '#fff' : '#000'
+                    background: msg.type === 'tool_status' ? '#e6f7ff' : msg.type === 'tool_result' ? '#f6ffed' : msg.role === 'user' ? '#1890ff' : '#f0f0f0',
+                    color: msg.role === 'user' ? '#fff' : '#000',
+                    maxWidth: '80%',
+                    wordBreak: 'break-word',
+                    border: msg.type === 'tool_status' ? '1px dashed #1890ff' : msg.type === 'tool_result' ? '1px solid #b7eb8f' : 'none'
                   }}
                 >
+                  {msg.type === 'tool_status' && <Spin size="small" style={{ marginRight: 8 }} />}
                   {msg.content}
                 </div>
               </div>
@@ -285,12 +374,14 @@ export function SearchPage() {
               value={aiInput}
               onChange={e => setAiInput(e.target.value)}
               onPressEnter={handleAiSend}
+              disabled={aiLoading}
             />
             <Button
               type="primary"
               icon={<SendOutlined />}
               onClick={handleAiSend}
               loading={aiLoading}
+              disabled={!aiInput.trim()}
             />
           </Space.Compact>
         </div>

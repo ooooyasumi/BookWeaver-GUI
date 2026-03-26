@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-03-26
+
+### Fixed
+
+- **AI 对话 Function Calling**
+  - 修复 DashScope Coding API 兼容性问题，移除对 `tool` 角色的依赖
+  - 改用 `system` 消息传递工具执行结果
+  - 修复无工具调用时的流式输出错误
+
+- **下载进度显示**
+  - 修复下载过程中进度条不可见的问题
+  - 修复下载完成后"已完成"标签页不显示批次的问题
+  - 优化下载中列表使用独立的书籍列表数据
+
+- **AI 对话消息样式**
+  - 优化消息气泡样式，更像手机聊天软件
+  - 工具状态消息显示为浅蓝色带加载图标
+  - 工具结果消息显示为浅绿色边框
+  - 简化输出内容，去除冗余信息
+
 ## [0.1.0] - 2026-03-26
 
 ### Added

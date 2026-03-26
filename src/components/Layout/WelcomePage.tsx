@@ -1,9 +1,12 @@
 import React, { useState, useCallback, DragEvent } from 'react'
-import { Button, Typography, Space, message } from 'antd'
+import { Button, Typography, Space, message, Tag } from 'antd'
 import { FolderOpenOutlined, FolderAddOutlined } from '@ant-design/icons'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 
 const { Title, Text } = Typography
+
+// 从 package.json 读取版本号
+const APP_VERSION = '0.1.1'
 
 export function WelcomePage() {
   const { openWorkspace, isLoading } = useWorkspace()
@@ -64,48 +67,77 @@ export function WelcomePage() {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
+        height: '100%',
         background: '#f0f2f5'
       }}
     >
-      <Space direction="vertical" size="large" align="center">
-        <div style={{ textAlign: 'center' }}>
-          <Title level={2}>BookWeaver</Title>
-          <Text type="secondary">Project Gutenberg 书籍下载工具</Text>
-        </div>
+      {/* 顶部拖动区域 */}
+      <div
+        className="drag-region"
+        style={{
+          height: 48,
+          flex: '0 0 48px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#fff',
+          borderBottom: '1px solid #f0f0f0'
+        }}
+      >
+        <Text strong style={{ fontSize: 14, marginLeft: 70 }}>BookWeaver</Text>
+      </div>
 
-        <div
-          style={{
-            padding: '48px 64px',
-            border: '2px dashed #d9d9d9',
-            borderRadius: 8,
-            background: isDragging ? 'rgba(24, 144, 255, 0.05)' : '#fff',
-            textAlign: 'center',
-            transition: 'all 0.3s',
-            borderColor: isDragging ? '#1890ff' : '#d9d9d9'
-          }}
-        >
-          <Space direction="vertical" size="middle">
-            <FolderAddOutlined style={{ fontSize: 48, color: '#1890ff' }} />
-            <Text>拖拽文件夹到此处，或点击下方按钮选择工作区</Text>
-            <Button
-              type="primary"
-              size="large"
-              icon={<FolderOpenOutlined />}
-              onClick={handleOpenFolder}
-              loading={isLoading}
-            >
-              打开工作区
-            </Button>
-          </Space>
-        </div>
+      {/* 主内容区 */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'auto'
+        }}
+      >
+        <Space direction="vertical" size="large" align="center">
+          <div style={{ textAlign: 'center' }}>
+            <Title level={2}>BookWeaver</Title>
+            <Space direction="vertical" size="small">
+              <Text type="secondary">Project Gutenberg 书籍下载工具</Text>
+              <Tag color="blue">v{APP_VERSION}</Tag>
+            </Space>
+          </div>
 
-        <Text type="secondary" style={{ fontSize: 12 }}>
-          工作区将用于存储下载的书籍和配置数据
-        </Text>
-      </Space>
+          <div
+            style={{
+              padding: '48px 64px',
+              border: '2px dashed #d9d9d9',
+              borderRadius: 8,
+              background: isDragging ? 'rgba(24, 144, 255, 0.05)' : '#fff',
+              textAlign: 'center',
+              transition: 'all 0.3s',
+              borderColor: isDragging ? '#1890ff' : '#d9d9d9'
+            }}
+          >
+            <Space direction="vertical" size="middle">
+              <FolderAddOutlined style={{ fontSize: 48, color: '#1890ff' }} />
+              <Text>拖拽文件夹到此处，或点击下方按钮选择工作区</Text>
+              <Button
+                type="primary"
+                size="large"
+                icon={<FolderOpenOutlined />}
+                onClick={handleOpenFolder}
+                loading={isLoading}
+              >
+                打开工作区
+              </Button>
+            </Space>
+          </div>
+
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            工作区将用于存储下载的书籍和配置数据
+          </Text>
+        </Space>
+      </div>
     </div>
   )
 }
