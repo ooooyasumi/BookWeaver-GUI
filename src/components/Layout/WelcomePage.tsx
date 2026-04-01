@@ -1,11 +1,10 @@
 import { useState, useCallback, DragEvent } from 'react'
-import { Button, Typography, Space, message, Tag } from 'antd'
+import { Button, Typography, message } from 'antd'
 import { FolderOpenOutlined, FolderAddOutlined } from '@ant-design/icons'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 
 const { Title, Text } = Typography
 
-// 从 package.json 读取版本号
 const APP_VERSION = '0.1.1'
 
 export function WelcomePage() {
@@ -74,17 +73,19 @@ export function WelcomePage() {
       <div
         className="title-bar-drag"
         style={{
-          height: 48,
-          flex: '0 0 48px',
+          height: 52,
+          flex: '0 0 52px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-start',
-          paddingLeft: 24,
+          paddingLeft: 80,
           background: 'var(--sidebar-bg)',
-          borderBottom: '1px solid rgba(255,255,255,0.05)'
         }}
       >
-        <Text strong style={{ fontSize: 16, color: '#fff', letterSpacing: '-0.5px' }}>BookWeaver</Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 18, lineHeight: 1 }}>📖</span>
+          <Text strong style={{ fontSize: 15, color: '#fff', letterSpacing: '-0.3px' }}>BookWeaver</Text>
+        </div>
       </div>
 
       {/* 主内容区 */}
@@ -96,75 +97,73 @@ export function WelcomePage() {
           alignItems: 'center',
           justifyContent: 'center',
           overflow: 'auto',
-          padding: 24
+          padding: 32
         }}
       >
-        <Space direction="vertical" size="large" align="center">
-          <div style={{ textAlign: 'center' }}>
-            <Title level={1} style={{ marginBottom: 8, fontSize: 36, fontWeight: 600 }}>
+        <div style={{ textAlign: 'center', maxWidth: 400 }}>
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>📖</div>
+            <Title level={2} style={{ marginBottom: 4, fontWeight: 700 }}>
               BookWeaver
             </Title>
-            <Space direction="vertical" size="small">
-              <Text type="secondary" style={{ fontSize: 15 }}>
-                Project Gutenberg 书籍下载工具
-              </Text>
-              <Tag color="blue" style={{ fontSize: 12, padding: '2px 12px' }}>
+            <Text type="secondary" style={{ fontSize: 14 }}>
+              Project Gutenberg 书籍下载工具
+            </Text>
+            <div style={{ marginTop: 8 }}>
+              <Text style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
                 v{APP_VERSION}
-              </Tag>
-            </Space>
+              </Text>
+            </div>
           </div>
 
           <div
             style={{
-              padding: '56px 72px',
-              border: '2px dashed var(--border-color)',
+              padding: '40px 48px',
+              border: `2px dashed ${isDragging ? 'var(--accent-color)' : 'var(--border-color)'}`,
               borderRadius: 16,
-              background: 'var(--bg-secondary)',
+              background: isDragging ? 'var(--accent-light)' : 'var(--bg-secondary)',
               textAlign: 'center',
               transition: 'all 0.3s ease',
-              borderColor: isDragging ? 'var(--accent-color)' : 'var(--border-color)',
-              boxShadow: isDragging ? '0 4px 24px rgba(0,122,255,0.15)' : 'var(--card-shadow)'
+              boxShadow: isDragging ? '0 4px 24px rgba(0,122,255,0.15)' : 'none'
             }}
           >
-            <Space direction="vertical" size="large" align="center">
-              <FolderAddOutlined
-                style={{
-                  fontSize: 56,
-                  color: 'var(--accent-color)',
-                  transition: 'transform 0.3s ease',
-                  transform: isDragging ? 'scale(1.1)' : 'scale(1)'
-                }}
-              />
-              <div>
-                <Text style={{ fontSize: 15, display: 'block', marginBottom: 8 }}>
-                  拖拽文件夹到此处
-                </Text>
-                <Text type="secondary" style={{ fontSize: 13 }}>
-                  或点击下方按钮选择工作区
-                </Text>
-              </div>
-              <Button
-                type="primary"
-                size="large"
-                icon={<FolderOpenOutlined />}
-                onClick={handleOpenFolder}
-                loading={isLoading}
-                style={{
-                  borderRadius: 10,
-                  padding: '12px 32px',
-                  fontSize: 15,
-                  height: 48
-                }}
-              >
-                打开工作区
-              </Button>
-            </Space>
+            <FolderAddOutlined
+              style={{
+                fontSize: 48,
+                color: isDragging ? 'var(--accent-color)' : 'var(--text-tertiary)',
+                transition: 'all 0.3s ease',
+                transform: isDragging ? 'scale(1.1)' : 'scale(1)',
+                display: 'block',
+                marginBottom: 16
+              }}
+            />
+            <Text style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>
+              拖拽文件夹到此处
+            </Text>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 20 }}>
+              或点击下方按钮选择工作区
+            </Text>
+            <Button
+              type="primary"
+              size="large"
+              icon={<FolderOpenOutlined />}
+              onClick={handleOpenFolder}
+              loading={isLoading}
+              style={{
+                borderRadius: 10,
+                padding: '8px 32px',
+                fontSize: 14,
+                height: 44
+              }}
+            >
+              打开工作区
+            </Button>
           </div>
 
-          <Text type="secondary" style={{ fontSize: 13 }}>
-            工作区将用于存储下载的书籍和配置数据
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 16 }}>
+            工作区用于存储下载的书籍和配置数据
           </Text>
-        </Space>
+        </div>
       </div>
     </div>
   )

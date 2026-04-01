@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron'
 import path from 'path'
 import { spawn, ChildProcess } from 'child_process'
-import { WorkspaceManager } from './workspace'
+import { WorkspaceManager, AppState, BatchMeta } from './workspace'
 
 let mainWindow: BrowserWindow | null = null
 let pythonProcess: ChildProcess | null = null
@@ -21,7 +21,9 @@ function createWindow() {
       contextIsolation: true
     },
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 15, y: 10 },
+    trafficLightPosition: { x: 15, y: 18 },
+    icon: path.join(__dirname, '../resources/icon.png'),
+    title: 'BookWeaver',
     show: false
   })
 
@@ -38,15 +40,11 @@ function createWindow() {
 }
 
 function startPythonBackend() {
-  const port = 8765
-
   if (isDev) {
-    // 开发模式：假设用户手动启动后端
-    console.log('开发模式：请手动启动后端 (npm run dev:backend)')
+    console.log('开发模式：请手动启动后端 (python dev.py)')
     return
   }
 
-  // 生产模式：启动嵌入的 Python 后端
   const resourcesPath = process.resourcesPath
   const pythonPath = process.platform === 'win32'
     ? path.join(resourcesPath, 'python', 'python.exe')
@@ -57,7 +55,7 @@ function startPythonBackend() {
   pythonProcess = spawn(pythonPath, [
     '-m', 'uvicorn', 'main:app',
     '--host', '127.0.0.1',
-    '--port', String(port)
+    '--port', '8765'
   ], {
     cwd: backendPath,
     stdio: 'inherit'
@@ -75,101 +73,87 @@ function stopPythonBackend() {
   }
 }
 
-// IPC 处理器
+// ─── IPC Handlers ────────────────────────────────────────────────────────────
 
-// 打开文件夹选择对话框
 ipcMain.handle('dialog:openFolder', async () => {
   const result = await dialog.showOpenDialog({
     properties: ['openDirectory', 'createDirectory']
   })
-
-  if (result.canceled || result.filePaths.length === 0) {
-    return null
-  }
-
+  if (result.canceled || result.filePaths.length === 0) return null
   return result.filePaths[0]
 })
 
-// 打开工作区
+// 打开工作区：初始化 WorkspaceManager，返回 AppState
 ipcMain.handle('workspace:open', async (_event, folderPath: string) => {
   workspaceManager = new WorkspaceManager(folderPath)
   await workspaceManager.initialize()
-  return workspaceManager.getData()
+  return workspaceManager.getState()
 })
 
 // 获取工作区状态
 ipcMain.handle('workspace:getStatus', async () => {
-  if (!workspaceManager) {
-    return null
-  }
-  return workspaceManager.getData()
+  if (!workspaceManager) return null
+  return workspaceManager.getState()
 })
 
-// 保存工作区数据
-ipcMain.handle('workspace:save', async (_event, data: unknown) => {
-  if (!workspaceManager) {
-    throw new Error('没有打开的工作区')
-  }
-  workspaceManager.save(data)
+// 保存完整 AppState（预下载列表 + 批次摘要）
+ipcMain.handle('workspace:save', async (_event, state: AppState) => {
+  if (!workspaceManager) throw new Error('没有打开的工作区')
+  workspaceManager.saveState(state)
   return true
+})
+
+// 获取批次详情 meta
+ipcMain.handle('workspace:getBatchMeta', async (_event, batchId: number) => {
+  if (!workspaceManager) return null
+  return workspaceManager.getBatchMeta(batchId)
+})
+
+// 保存批次详情 meta（下载过程中实时调用）
+ipcMain.handle('workspace:saveBatchMeta', async (_event, meta: BatchMeta) => {
+  if (!workspaceManager) throw new Error('没有打开的工作区')
+  workspaceManager.saveBatchMeta(meta)
+  return true
+})
+
+// 获取下一个批次 ID
+ipcMain.handle('workspace:nextBatchId', async () => {
+  if (!workspaceManager) return 1
+  return workspaceManager.nextBatchId()
 })
 
 // 获取配置
 ipcMain.handle('config:get', async () => {
-  if (!workspaceManager) {
-    return null
-  }
+  if (!workspaceManager) return null
   return workspaceManager.getConfig()
 })
 
 // 保存配置
 ipcMain.handle('config:save', async (_event, config: unknown) => {
-  if (!workspaceManager) {
-    throw new Error('没有打开的工作区')
-  }
-  workspaceManager.saveConfig(config)
+  if (!workspaceManager) throw new Error('没有打开的工作区')
+  workspaceManager.saveConfig(config as any)
   return true
 })
 
-// 获取 AI 上下文
-ipcMain.handle('ai:getContext', async () => {
-  if (!workspaceManager) {
-    return null
-  }
-  return workspaceManager.getAIContext()
+// 在文件管理器中打开路径
+ipcMain.handle('shell:openPath', async (_event, targetPath: string) => {
+  shell.openPath(targetPath)
 })
 
-// 保存 AI 上下文
-ipcMain.handle('ai:saveContext', async (_event, context: unknown) => {
-  if (!workspaceManager) {
-    throw new Error('没有打开的工作区')
-  }
-  workspaceManager.saveAIContext(context)
-  return true
-})
+// ─── App lifecycle ───────────────────────────────────────────────────────────
 
-// 在文件管理器中打开
-ipcMain.handle('shell:openPath', async (_event, path: string) => {
-  shell.openPath(path)
-})
-
-// 应用生命周期
 app.whenReady().then(() => {
   startPythonBackend()
   createWindow()
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
 app.on('window-all-closed', () => {
   stopPythonBackend()
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('before-quit', () => {

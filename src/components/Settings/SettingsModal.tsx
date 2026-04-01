@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Modal, Form, Input, Select, InputNumber, Button, Space, Divider, message, Tag, Switch, Row, Col } from 'antd'
+import { Modal, Form, Input, AutoComplete, InputNumber, Button, Space, Divider, message, Tag, Switch, Row, Col } from 'antd'
 import { SettingOutlined, SaveOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, MoonOutlined } from '@ant-design/icons'
 import { useTheme } from '../../contexts/ThemeContext'
 
@@ -59,6 +59,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const { toggleTheme, isDark } = useTheme()
 
+  const apiKey = Form.useWatch(['llm', 'apiKey'], form)
+  const baseUrl = Form.useWatch(['llm', 'baseUrl'], form)
+  const model = Form.useWatch(['llm', 'model'], form)
+  const canTest = !!(apiKey?.trim() && baseUrl?.trim() && model?.trim())
+
   // 加载配置
   useEffect(() => {
     if (open) {
@@ -107,7 +112,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   // 测试 API 连接
   const handleTestApi = async () => {
     try {
-      const values = await form.validateFields(['llm.apiKey', 'llm.baseUrl', 'llm.model'])
+      const values = await form.validateFields([['llm', 'apiKey'], ['llm', 'baseUrl'], ['llm', 'model']])
       setTestingApi(true)
       setTestStatus('idle')
 
@@ -217,7 +222,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                     size="small"
                     onClick={handleTestApi}
                     loading={testingApi}
-                    disabled={!form.getFieldValue(['llm', 'apiKey'])}
+                    disabled={!canTest}
                     icon={testStatus === 'success' ? <CheckCircleOutlined /> : testStatus === 'error' ? <CloseCircleOutlined /> : <SyncOutlined />}
                   >
                     {testStatus === 'success' ? '成功' : testStatus === 'error' ? '失败' : '测试'}
@@ -229,10 +234,18 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             <Form.Item
               name={['llm', 'model']}
               label="模型"
-              rules={[{ required: true, message: '请选择模型' }]}
+              rules={[{ required: true, message: '请输入或选择模型' }]}
               style={{ marginBottom: 20 }}
             >
-              <Select placeholder="选择 LLM 模型" options={LLM_MODELS} size="large" />
+              <AutoComplete
+                placeholder="选择或输入模型名称"
+                size="large"
+                options={LLM_MODELS}
+                filterOption={(input, option) =>
+                  (option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ||
+                  (option?.value as string)?.toLowerCase().includes(input.toLowerCase())
+                }
+              />
             </Form.Item>
 
             <Row gutter={16}>

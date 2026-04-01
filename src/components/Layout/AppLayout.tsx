@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Typography, Button, Space, Tooltip } from 'antd'
+import { Typography, Button, Tooltip } from 'antd'
 import { SettingOutlined, FolderOutlined, MoonOutlined, SunOutlined } from '@ant-design/icons'
 import { Sidebar } from './Sidebar'
 import { SearchPage } from '../Search/SearchPage'
@@ -40,20 +40,21 @@ export function AppLayout() {
       <div className="main-section">
         {/* 顶部标题栏 */}
         <header className="title-bar">
-          <div className="title-bar-drag" style={{ width: 70, flexShrink: 0 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <FolderOutlined style={{ color: 'var(--text-tertiary)', fontSize: 13 }} />
+            <Text style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
+              {workspacePath ? workspacePath.split('/').pop() : 'BookWeaver'}
+            </Text>
+          </div>
 
-          <Text strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>
-            <FolderOutlined style={{ marginRight: 8, color: 'var(--text-secondary)' }} />
-            {workspacePath ? workspacePath.split('/').pop() : 'BookWeaver'}
-          </Text>
-
-          <Space size="small" className="title-bar-no-drag">
-            <Tooltip title={isDark ? '切换到浅色模式' : '切换到深色模式'}>
+          <div className="title-bar-no-drag" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <Tooltip title={isDark ? '浅色模式' : '深色模式'}>
               <Button
                 type="text"
                 icon={isDark ? <SunOutlined /> : <MoonOutlined />}
                 onClick={toggleTheme}
                 size="small"
+                style={{ color: 'var(--text-tertiary)' }}
               />
             </Tooltip>
             <Tooltip title="设置">
@@ -62,9 +63,10 @@ export function AppLayout() {
                 icon={<SettingOutlined />}
                 onClick={() => setSettingsOpen(true)}
                 size="small"
+                style={{ color: 'var(--text-tertiary)' }}
               />
             </Tooltip>
-          </Space>
+          </div>
         </header>
 
         {/* 可滚动内容区 */}

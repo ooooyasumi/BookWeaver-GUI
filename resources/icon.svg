@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+    <linearGradient id="book" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e8d5b7"/>
+      <stop offset="100%" style="stop-color:#d4b896"/>
+    </linearGradient>
+    <linearGradient id="cover" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#007aff"/>
+      <stop offset="100%" style="stop-color:#005ecb"/>
+    </linearGradient>
+    <linearGradient id="pages" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#f5f0e8"/>
+      <stop offset="100%" style="stop-color:#e8dfd0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 圆角背景 -->
+  <rect x="0" y="0" width="1024" height="1024" rx="220" fill="url(#bg)"/>
+
+  <!-- 书本主体 - 打开的书 -->
+  <!-- 左侧封面 -->
+  <path d="M 200 280 Q 200 240 240 240 L 490 240 L 490 780 L 240 780 Q 200 780 200 740 Z" fill="url(#cover)" opacity="0.9"/>
+
+  <!-- 右侧封面 -->
+  <path d="M 534 240 L 784 240 Q 824 240 824 280 L 824 740 Q 824 780 784 780 L 534 780 Z" fill="url(#cover)" opacity="0.8"/>
+
+  <!-- 书脊 -->
+  <rect x="490" y="240" width="44" height="540" fill="#004cb3" rx="4"/>
+  <line x1="512" y1="260" x2="512" y2="760" stroke="#ffffff" stroke-width="1" opacity="0.15"/>
+
+  <!-- 左侧页面 -->
+  <rect x="230" y="270" width="245" height="480" rx="4" fill="url(#pages)"/>
+
+  <!-- 左侧文本行 -->
+  <rect x="260" y="320" width="160" height="4" rx="2" fill="#c4b8a5" opacity="0.6"/>
+  <rect x="260" y="340" width="185" height="4" rx="2" fill="#c4b8a5" opacity="0.5"/>
+  <rect x="260" y="360" width="140" height="4" rx="2" fill="#c4b8a5" opacity="0.4"/>
+  <rect x="260" y="380" width="175" height="4" rx="2" fill="#c4b8a5" opacity="0.5"/>
+  <rect x="260" y="400" width="120" height="4" rx="2" fill="#c4b8a5" opacity="0.4"/>
+
+  <rect x="260" y="440" width="170" height="4" rx="2" fill="#c4b8a5" opacity="0.5"/>
+  <rect x="260" y="460" width="185" height="4" rx="2" fill="#c4b8a5" opacity="0.4"/>
+  <rect x="260" y="480" width="145" height="4" rx="2" fill="#c4b8a5" opacity="0.5"/>
+  <rect x="260" y="500" width="165" height="4" rx="2" fill="#c4b8a5" opacity="0.4"/>
+
+  <!-- 右侧页面 -->
+  <rect x="549" y="270" width="245" height="480" rx="4" fill="url(#pages)"/>
+
+  <!-- 右侧文本行 -->
+  <rect x="579" y="320" width="175" height="4" rx="2" fill="#c4b8a5" opacity="0.5"/>
+  <rect x="579" y="340" width="150" height="4" rx="2" fill="#c4b8a5" opacity="0.4"/>
+  <rect x="579" y="360" width="185" height="4" rx="2" fill="#c4b8a5" opacity="0.5"/>
+  <rect x="579" y="380" width="130" height="4" rx="2" fill="#c4b8a5" opacity="0.4"/>
+  <rect x="579" y="400" width="170" height="4" rx="2" fill="#c4b8a5" opacity="0.5"/>
+
+  <rect x="579" y="440" width="155" height="4" rx="2" fill="#c4b8a5" opacity="0.4"/>
+  <rect x="579" y="460" width="180" height="4" rx="2" fill="#c4b8a5" opacity="0.5"/>
+  <rect x="579" y="480" width="140" height="4" rx="2" fill="#c4b8a5" opacity="0.4"/>
+  <rect x="579" y="500" width="165" height="4" rx="2" fill="#c4b8a5" opacity="0.5"/>
+
+  <!-- 装饰光效 -->
+  <ellipse cx="512" cy="512" rx="280" ry="240" fill="url(#cover)" opacity="0.03"/>
+</svg>

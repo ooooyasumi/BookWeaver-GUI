@@ -32,39 +32,41 @@ export function Sidebar() {
       <div
         className="title-bar-drag"
         style={{
-          height: 48,
-          flex: '0 0 48px',
+          height: 52,
+          flex: '0 0 52px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'flex-start',
-          paddingLeft: 24,
-          borderBottom: '1px solid rgba(255,255,255,0.05)'
+          paddingLeft: 80,
         }}
       >
-        <span style={{ color: '#fff', fontSize: 18, fontWeight: 600, letterSpacing: '-0.5px' }}>
-          BookWeaver
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 20, lineHeight: 1 }}>📖</span>
+          <span style={{ color: '#fff', fontSize: 16, fontWeight: 700, letterSpacing: '-0.3px' }}>
+            BookWeaver
+          </span>
+        </div>
       </div>
-      <Menu
-        theme="dark"
-        mode="inline"
-        selectedKeys={[currentPage]}
-        items={menuItems}
-        onClick={handleMenuClick}
-        style={{
-          flex: 1,
-          border: 'none',
-          background: 'transparent',
-          paddingTop: 16
-        }}
-      />
+      <div style={{ flex: 1, padding: '12px 12px 0' }}>
+        <Menu
+          theme="dark"
+          mode="inline"
+          selectedKeys={[currentPage]}
+          items={menuItems}
+          onClick={handleMenuClick}
+          style={{
+            border: 'none',
+            background: 'transparent',
+          }}
+        />
+      </div>
       <div
         style={{
-          padding: '16px 24px',
-          borderTop: '1px solid rgba(255,255,255,0.05)',
-          color: 'rgba(255,255,255,0.35)',
-          fontSize: 12,
-          fontWeight: 500
+          padding: '12px 16px',
+          color: 'rgba(255,255,255,0.25)',
+          fontSize: 11,
+          fontWeight: 500,
+          letterSpacing: '0.5px'
         }}
       >
         v0.1.1

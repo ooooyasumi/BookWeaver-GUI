@@ -1,6 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
-// 暴露给渲染进程的 API
 contextBridge.exposeInMainWorld('electronAPI', {
   // 对话框
   openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
@@ -10,13 +9,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getWorkspaceStatus: () => ipcRenderer.invoke('workspace:getStatus'),
   saveWorkspace: (data: unknown) => ipcRenderer.invoke('workspace:save', data),
 
+  // 批次 meta
+  getBatchMeta: (batchId: number) => ipcRenderer.invoke('workspace:getBatchMeta', batchId),
+  saveBatchMeta: (meta: unknown) => ipcRenderer.invoke('workspace:saveBatchMeta', meta),
+  nextBatchId: () => ipcRenderer.invoke('workspace:nextBatchId'),
+
   // 配置
   getConfig: () => ipcRenderer.invoke('config:get'),
   saveConfig: (config: unknown) => ipcRenderer.invoke('config:save', config),
-
-  // AI 上下文
-  getAIContext: () => ipcRenderer.invoke('ai:getContext'),
-  saveAIContext: (context: unknown) => ipcRenderer.invoke('ai:saveContext', context),
 
   // Shell
   openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path)

@@ -1,16 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Input, Button, Space, message, Checkbox, FloatButton, Drawer, Card } from 'antd'
-import { SearchOutlined, RobotOutlined, SendOutlined, PlusOutlined } from '@ant-design/icons'
+import { SearchOutlined, MessageOutlined, SendOutlined, PlusOutlined } from '@ant-design/icons'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { BookList } from '../Common/BookList'
-
-interface BookResult {
-  id: number
-  title: string
-  author: string
-  language: string
-  matchScore: number
-}
 
 interface Message {
   role: 'user' | 'assistant' | 'system'
@@ -31,12 +23,23 @@ interface Config {
 }
 
 export function SearchPage() {
-  const { addToPending } = useWorkspace()
+  const {
+    addToPending,
+    searchResults,
+    searchResultSelectedKeys,
+    setSearchResults,
+    appendSearchResults,
+    removeFromSearchResults,
+    clearSearchResults,
+    toggleSearchResultSelection,
+    selectAllSearchResults,
+    clearSearchResultSelection
+  } = useWorkspace()
   const [searchTitle, setSearchTitle] = useState('')
   const [searchAuthor, setSearchAuthor] = useState('')
-  const [searchResults, setSearchResults] = useState<BookResult[]>([])
-  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [loading, setLoading] = useState(false)
+
+  const selectedRowKeys = searchResultSelectedKeys
 
   // AI 对话相关
   const [aiDrawerOpen, setAiDrawerOpen] = useState(false)
@@ -58,7 +61,7 @@ export function SearchPage() {
       )
       const data = await response.json()
       setSearchResults(data.results || [])
-      setSelectedRowKeys([])
+      clearSearchResultSelection()
     } catch (error) {
       message.error('搜索失败')
       console.error(error)
@@ -81,20 +84,26 @@ export function SearchPage() {
         title: book.title,
         author: book.author,
         language: book.language,
-        selected: true
       }))
 
     addToPending(selectedBooks)
     message.success(`已添加 ${selectedBooks.length} 本书籍到预下载列表`)
-    setSelectedRowKeys([])
+    // 清空选择状态，但保留搜索结果列表
+    clearSearchResultSelection()
   }
 
   // AI 对话
+  const aiMessagesRef = useRef<Message[]>([])  // 与 aiMessages state 同步，用于读取当前长度
+
   const handleAiSend = async () => {
     if (!aiInput.trim()) return
 
     const userMessage: Message = { role: 'user', content: aiInput }
-    setAiMessages(prev => [...prev, userMessage])
+    setAiMessages(prev => {
+      const next = [...prev, userMessage]
+      aiMessagesRef.current = next
+      return next
+    })
     setAiInput('')
     setAiLoading(true)
 
@@ -127,10 +136,32 @@ export function SearchPage() {
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
       let assistantContent = ''
-      let hasContent = false
+      let totalAdded = 0
 
-      // 先添加一条空的助手消息
-      setAiMessages(prev => [...prev, { role: 'assistant', content: '', type: 'normal' }])
+      // 用固定索引追踪两条特殊消息：状态消息 + 最终回复消息
+      // 索引在首次插入时确定，后续原地更新，避免大批量时刷屏
+      let statusMsgIdx = -1
+      let replyMsgIdx = -1
+
+      const insertStatusMsg = (text: string) => {
+        statusMsgIdx = aiMessagesRef.current.length
+        setAiMessages(prev => {
+          const next = [...prev, { role: 'assistant' as const, content: text, type: 'tool_status' as const }]
+          aiMessagesRef.current = next
+          return next
+        })
+      }
+
+      const updateStatusMsg = (text: string) => {
+        setAiMessages(prev => {
+          const msgs = [...prev]
+          if (statusMsgIdx >= 0 && statusMsgIdx < msgs.length) {
+            msgs[statusMsgIdx] = { role: 'assistant', content: text, type: 'tool_status' }
+          }
+          aiMessagesRef.current = msgs
+          return msgs
+        })
+      }
 
       if (reader) {
         let buffer = ''
@@ -140,55 +171,89 @@ export function SearchPage() {
 
           buffer += decoder.decode(value, { stream: true })
 
-          // 解析 SSE 事件
           const lines = buffer.split('\n')
-          buffer = lines.pop() || '' // 保留未完成的行
+          buffer = lines.pop() || ''
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const event = JSON.parse(line.slice(6))
+            if (!line.startsWith('data: ')) continue
+            try {
+              const event = JSON.parse(line.slice(6))
 
-                if (event.type === 'token') {
-                  hasContent = true
-                  assistantContent += event.content
-                  // 实时更新最后一条消息
+              if (event.type === 'token') {
+                assistantContent += event.content
+                if (replyMsgIdx === -1) {
+                  // 第一个 token：新建回复消息
+                  replyMsgIdx = aiMessagesRef.current.length
                   setAiMessages(prev => {
-                    const newMessages = [...prev]
-                    const lastIdx = newMessages.length - 1
-                    newMessages[lastIdx] = { role: 'assistant', content: assistantContent, type: 'normal' }
-                    return newMessages
+                    const next = [...prev, { role: 'assistant' as const, content: assistantContent, type: 'normal' as const }]
+                    aiMessagesRef.current = next
+                    return next
                   })
-                } else if (event.type === 'tool_status') {
-                  // 工具状态消息 - 显示为加载提示
-                  setAiMessages(prev => [...prev, { role: 'assistant', content: '正在搜索...', type: 'tool_status' }])
-                } else if (event.type === 'add_books') {
-                  // 添加书籍到搜索结果
-                  const books = event.books || []
-                  if (books.length > 0) {
-                    setSearchResults(books)
-                    setSelectedRowKeys([])
-                    // 添加工具执行结果消息
-                    setAiMessages(prev => [...prev, { role: 'assistant', content: `已找到 ${books.length} 本书，请在列表中查看`, type: 'tool_result' }])
-                  }
-                } else if (event.type === 'error') {
-                  message.error(event.content)
+                } else {
+                  // 后续 token：原地更新
+                  setAiMessages(prev => {
+                    const msgs = [...prev]
+                    if (replyMsgIdx >= 0 && replyMsgIdx < msgs.length) {
+                      msgs[replyMsgIdx] = { role: 'assistant', content: assistantContent, type: 'normal' }
+                    }
+                    aiMessagesRef.current = msgs
+                    return msgs
+                  })
                 }
-              } catch {
-                // 忽略解析错误
+
+              } else if (event.type === 'tool_status') {
+                const statusText = event.content || '正在处理...'
+                if (statusMsgIdx === -1) {
+                  insertStatusMsg(statusText)
+                } else {
+                  updateStatusMsg(statusText)
+                }
+
+              } else if (event.type === 'clear_results') {
+                clearSearchResults()
+                totalAdded = 0
+
+              } else if (event.type === 'add_books') {
+                const books = event.books || []
+                if (books.length > 0) {
+                  appendSearchResults(books)
+                  totalAdded += books.length
+                  if (statusMsgIdx !== -1) {
+                    updateStatusMsg(`搜索中，已加入 ${totalAdded} 本书...`)
+                  }
+                }
+
+              } else if (event.type === 'remove_books') {
+                const ids = event.ids || []
+                if (ids.length > 0) {
+                  removeFromSearchResults(ids)
+                }
+
+              } else if (event.type === 'complete') {
+                // 完成：把状态消息改为最终统计
+                if (statusMsgIdx !== -1 && totalAdded > 0) {
+                  setAiMessages(prev => {
+                    const msgs = [...prev]
+                    if (statusMsgIdx >= 0 && statusMsgIdx < msgs.length) {
+                      msgs[statusMsgIdx] = {
+                        role: 'assistant',
+                        content: `共加入 ${totalAdded} 本书到列表`,
+                        type: 'tool_result'
+                      }
+                    }
+                    aiMessagesRef.current = msgs
+                    return msgs
+                  })
+                }
+
+              } else if (event.type === 'error') {
+                message.error(event.content)
               }
+            } catch {
+              // 忽略解析错误
             }
           }
         }
-      }
-
-      // 如果没有收到任何内容，更新最后一条消息
-      if (!hasContent && assistantContent === '') {
-        setAiMessages(prev => {
-          const newMessages = [...prev]
-          newMessages[newMessages.length - 1] = { role: 'assistant', content: '未收到回复，请检查 API Key 是否正确', type: 'normal' }
-          return newMessages
-        })
       }
     } catch (error) {
       message.error('AI 对话失败')
@@ -203,22 +268,24 @@ export function SearchPage() {
     <div>
       {/* 搜索卡片 */}
       <Card className="card" style={{ marginBottom: 24 }}>
-        <Space.Compact style={{ width: '100%' }}>
+        <div style={{ display: 'flex', gap: 8 }}>
           <Input
             placeholder="书名"
             value={searchTitle}
             onChange={e => setSearchTitle(e.target.value)}
             onPressEnter={handleSearch}
-            style={{ width: '25%' }}
+            style={{ flex: 2 }}
             size="large"
+            allowClear
           />
           <Input
             placeholder="作者"
             value={searchAuthor}
             onChange={e => setSearchAuthor(e.target.value)}
             onPressEnter={handleSearch}
-            style={{ width: '25%' }}
+            style={{ flex: 1 }}
             size="large"
+            allowClear
           />
           <Button
             type="primary"
@@ -226,10 +293,11 @@ export function SearchPage() {
             onClick={handleSearch}
             loading={loading}
             size="large"
+            style={{ flexShrink: 0 }}
           >
             搜索
           </Button>
-        </Space.Compact>
+        </div>
       </Card>
 
       {/* 操作栏 */}
@@ -240,11 +308,7 @@ export function SearchPage() {
               checked={selectedRowKeys.length === searchResults.length && searchResults.length > 0}
               indeterminate={selectedRowKeys.length > 0 && selectedRowKeys.length < searchResults.length}
               onChange={e => {
-                if (e.target.checked) {
-                  setSelectedRowKeys(searchResults.map(b => b.id))
-                } else {
-                  setSelectedRowKeys([])
-                }
+                selectAllSearchResults(e.target.checked)
               }}
             >
               全选
@@ -260,6 +324,12 @@ export function SearchPage() {
             >
               预下载
             </Button>
+            <Button
+              onClick={clearSearchResultSelection}
+              disabled={selectedRowKeys.length === 0}
+            >
+              清空
+            </Button>
           </Space>
         </Card>
       )}
@@ -269,13 +339,23 @@ export function SearchPage() {
         type="search"
         data={searchResults}
         loading={loading}
-        selectedRowKeys={selectedRowKeys as number[]}
-        onSelectionChange={(keys) => setSelectedRowKeys(keys)}
+        selectedRowKeys={selectedRowKeys}
+        onSelectionChange={(keys) => {
+          const clickedId = keys.find(k => !searchResultSelectedKeys.includes(k))
+          if (clickedId) {
+            toggleSearchResultSelection(clickedId)
+          } else {
+            const removedId = searchResultSelectedKeys.find(k => !keys.includes(k))
+            if (removedId) {
+              toggleSearchResultSelection(removedId)
+            }
+          }
+        }}
       />
 
       {/* AI 悬浮按钮 */}
       <FloatButton
-        icon={<RobotOutlined />}
+        icon={<MessageOutlined />}
         type="primary"
         onClick={() => setAiDrawerOpen(true)}
         tooltip="AI 助手"
@@ -284,9 +364,14 @@ export function SearchPage() {
 
       {/* AI 对话抽屉 */}
       <Drawer
-        title="AI 助手"
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <MessageOutlined style={{ color: 'var(--accent-color)' }} />
+            <span>AI 助手</span>
+          </div>
+        }
         placement="right"
-        width={420}
+        width={400}
         open={aiDrawerOpen}
         onClose={() => setAiDrawerOpen(false)}
         styles={{
@@ -295,12 +380,18 @@ export function SearchPage() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           {/* 消息列表 */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+            {aiMessages.length === 0 && (
+              <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-tertiary)' }}>
+                <MessageOutlined style={{ fontSize: 32, display: 'block', marginBottom: 12, opacity: 0.4 }} />
+                <div style={{ fontSize: 13 }}>向 AI 描述你想找的书籍</div>
+              </div>
+            )}
             {aiMessages.map((msg, idx) => (
               <div
                 key={idx}
                 style={{
-                  marginBottom: 12,
+                  marginBottom: 10,
                   textAlign: msg.role === 'user' ? 'right' : 'left'
                 }}
               >
@@ -308,12 +399,8 @@ export function SearchPage() {
                   className={msg.role === 'user' ? 'ai-message-user' : msg.type === 'tool_status' ? 'ai-message-tool-status' : msg.type === 'tool_result' ? 'ai-message-tool-result' : 'ai-message-assistant'}
                   style={{
                     display: 'inline-block',
-                    padding: '10px 14px',
-                    borderRadius: 16,
                     maxWidth: '85%',
                     wordBreak: 'break-word',
-                    fontSize: 14,
-                    lineHeight: 1.5
                   }}
                 >
                   {msg.content}
@@ -321,7 +408,7 @@ export function SearchPage() {
               </div>
             ))}
             {aiLoading && (
-              <div style={{ textAlign: 'center', padding: 12 }}>
+              <div style={{ textAlign: 'left', padding: '4px 0' }}>
                 <span style={{ color: 'var(--text-tertiary)', fontSize: 13 }}>AI 正在思考...</span>
               </div>
             )}
@@ -329,7 +416,7 @@ export function SearchPage() {
 
           {/* 输入框 */}
           <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)' }}>
-            <Space.Compact style={{ width: '100%' }}>
+            <div style={{ display: 'flex', gap: 8 }}>
               <Input
                 placeholder="输入消息..."
                 value={aiInput}
@@ -337,6 +424,7 @@ export function SearchPage() {
                 onPressEnter={handleAiSend}
                 disabled={aiLoading}
                 size="large"
+                style={{ flex: 1 }}
               />
               <Button
                 type="primary"
@@ -346,7 +434,7 @@ export function SearchPage() {
                 disabled={!aiInput.trim()}
                 size="large"
               />
-            </Space.Compact>
+            </div>
           </div>
         </div>
       </Drawer>

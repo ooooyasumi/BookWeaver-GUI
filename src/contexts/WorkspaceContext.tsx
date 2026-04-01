@@ -1,29 +1,31 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 
-// TypeScript 类型声明
+// ─── electronAPI 类型声明 ─────────────────────────────────────────────────────
+
 declare global {
   interface Window {
     electronAPI: {
       openFolder: () => Promise<string | null>
-      openWorkspace: (folderPath: string) => Promise<WorkspaceData>
-      getWorkspaceStatus: () => Promise<WorkspaceData | null>
-      saveWorkspace: (data: WorkspaceData) => Promise<boolean>
+      openWorkspace: (folderPath: string) => Promise<AppState>
+      getWorkspaceStatus: () => Promise<AppState | null>
+      saveWorkspace: (state: AppState) => Promise<boolean>
+      getBatchMeta: (batchId: number) => Promise<BatchMeta | null>
+      saveBatchMeta: (meta: BatchMeta) => Promise<boolean>
+      nextBatchId: () => Promise<number>
       getConfig: () => Promise<Config>
       saveConfig: (config: Config) => Promise<boolean>
-      getAIContext: () => Promise<AIContext>
-      saveAIContext: (context: AIContext) => Promise<boolean>
       openPath: (path: string) => Promise<void>
     }
   }
 }
 
-// 类型定义
+// ─── 类型定义 ────────────────────────────────────────────────────────────────
+
 export interface PendingBook {
   id: number
   title: string
   author: string
   language: string
-  selected: boolean
 }
 
 export interface DownloadResult {
@@ -32,31 +34,56 @@ export interface DownloadResult {
   success: boolean
   filePath?: string
   error?: string
+  cancelled?: boolean
 }
 
-export interface Batch {
+/** 批次摘要（存 state.json，轻量） */
+export interface BatchSummary {
   id: number
   name: string
   createdAt: string
-  status: 'downloading' | 'completed' | 'failed'
+  status: 'downloading' | 'paused' | 'completed' | 'failed'
   total: number
   success: number
   failed: number
+  outputDir: string
+}
+
+/** 批次详情（存 meta.json，含完整书单和结果） */
+export interface BatchMeta {
+  id: number
+  books: PendingBook[]
+  completedIds: number[]
   results: DownloadResult[]
 }
 
-export interface WorkspaceData {
+/** 持久化状态（写磁盘） */
+export interface AppState {
   version: string
-  createdAt: string
   updatedAt: string
-  pendingDownloads: PendingBook[]
-  currentBatch: number | null
-  batches: Batch[]
+  pending: PendingBook[]
+  batches: BatchSummary[]
 }
 
-export interface AIContext {
-  history: Array<{ role: string; content: string }>
-  bookList: PendingBook[]
+/** 下载中临时状态（仅内存，不写磁盘） */
+export interface ActiveDownload {
+  batchId: number
+  downloadId: string          // 用于 pause API
+  books: PendingBook[]        // 本次下载的全部书
+  results: DownloadResult[]   // 实时结果
+  completed: number           // 已完成本数（含成功+失败）
+  total: number
+  percent: number
+  speedBps: number            // 当前网速 bytes/s
+  isPaused: boolean
+}
+
+export interface BookResult {
+  id: number
+  title: string
+  author: string
+  language: string
+  matchScore: number
 }
 
 export interface Config {
@@ -75,51 +102,75 @@ export interface Config {
 
 export type PageType = 'search' | 'download' | 'library'
 
-// Context 类型
+// ─── Context 类型 ─────────────────────────────────────────────────────────────
+
 interface WorkspaceContextType {
-  // 工作区状态
   isWorkspaceOpen: boolean
   workspacePath: string | null
-  workspaceData: WorkspaceData | null
+  appState: AppState | null
   currentPage: PageType
-
-  // 加载状态
   isLoading: boolean
 
-  // 操作方法
+  // 搜索结果（临时，不持久化）
+  searchResults: BookResult[]
+  searchResultSelectedKeys: number[]
+
+  // 下载中临时状态（不持久化）
+  activeDownload: ActiveDownload | null
+
   openWorkspace: (path: string) => Promise<void>
   closeWorkspace: () => void
-  saveWorkspaceData: () => Promise<void>
   setCurrentPage: (page: PageType) => void
 
-  // 工作区数据操作
+  // 预下载列表操作
   addToPending: (books: PendingBook[]) => void
   removeFromPending: (ids: number[]) => void
-  updatePendingSelection: (id: number, selected: boolean) => void
-  selectAllPending: (selected: boolean) => void
 
-  // 批次操作
-  addBatch: (batch: Batch) => void
-  updateBatch: (id: number, batch: Partial<Batch>) => void
+  // 批次摘要操作
+  addBatchSummary: (batch: BatchSummary) => void
+  updateBatchSummary: (id: number, updates: Partial<BatchSummary>) => void
+
+  // 搜索结果操作
+  setSearchResults: (books: BookResult[]) => void
+  appendSearchResults: (books: BookResult[]) => void
+  removeFromSearchResults: (ids: number[]) => void
+  clearSearchResults: () => void
+  toggleSearchResultSelection: (id: number) => void
+  selectAllSearchResults: (selected: boolean) => void
+  clearSearchResultSelection: () => void
+
+  // 下载中状态操作（纯内存）
+  setActiveDownload: (d: ActiveDownload | null) => void
+  updateActiveDownload: (updates: Partial<ActiveDownload>) => void
 }
+
+// ─── Context ──────────────────────────────────────────────────────────────────
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined)
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false)
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
-  const [workspaceData, setWorkspaceData] = useState<WorkspaceData | null>(null)
+  const [appState, setAppState] = useState<AppState | null>(null)
   const [currentPage, setCurrentPage] = useState<PageType>('search')
   const [isLoading, setIsLoading] = useState(false)
 
-  // 打开工作区
+  // 临时状态（不持久化）
+  const [searchResults, setSearchResultsState] = useState<BookResult[]>([])
+  const [searchResultSelectedKeys, setSearchResultSelectedKeys] = useState<number[]>([])
+  const [activeDownload, setActiveDownload] = useState<ActiveDownload | null>(null)
+
+  // ── 工作区 ──────────────────────────────────────────────────────────────
+
   const openWorkspace = async (path: string) => {
     setIsLoading(true)
     try {
-      const data = await window.electronAPI.openWorkspace(path)
+      const state = await window.electronAPI.openWorkspace(path)
       setWorkspacePath(path)
-      setWorkspaceData(data)
+      setAppState(state)
       setIsWorkspaceOpen(true)
+
+      // 如果有 paused 状态的批次，不自动恢复，让用户在下载页面手动操作
     } catch (error) {
       console.error('打开工作区失败:', error)
       throw error
@@ -128,104 +179,131 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // 关闭工作区
   const closeWorkspace = () => {
     setIsWorkspaceOpen(false)
     setWorkspacePath(null)
-    setWorkspaceData(null)
+    setAppState(null)
     setCurrentPage('search')
+    setSearchResultsState([])
+    setSearchResultSelectedKeys([])
+    setActiveDownload(null)
   }
 
-  // 保存工作区数据
-  const saveWorkspaceData = async () => {
-    if (!workspaceData) return
-    await window.electronAPI.saveWorkspace(workspaceData)
-  }
+  // ── 持久化（仅保存 appState，不含临时下载进度）──────────────────────────
 
-  // 添加到预下载
-  const addToPending = (books: PendingBook[]) => {
-    if (!workspaceData) return
-    const existingIds = new Set(workspaceData.pendingDownloads.map(b => b.id))
-    const newBooks = books.filter(b => !existingIds.has(b.id))
-    setWorkspaceData({
-      ...workspaceData,
-      pendingDownloads: [...workspaceData.pendingDownloads, ...newBooks]
-    })
-  }
-
-  // 从预下载移除
-  const removeFromPending = (ids: number[]) => {
-    if (!workspaceData) return
-    setWorkspaceData({
-      ...workspaceData,
-      pendingDownloads: workspaceData.pendingDownloads.filter(b => !ids.includes(b.id))
-    })
-  }
-
-  // 更新选中状态
-  const updatePendingSelection = (id: number, selected: boolean) => {
-    if (!workspaceData) return
-    setWorkspaceData({
-      ...workspaceData,
-      pendingDownloads: workspaceData.pendingDownloads.map(b =>
-        b.id === id ? { ...b, selected } : b
-      )
-    })
-  }
-
-  // 全选/取消全选
-  const selectAllPending = (selected: boolean) => {
-    if (!workspaceData) return
-    setWorkspaceData({
-      ...workspaceData,
-      pendingDownloads: workspaceData.pendingDownloads.map(b => ({ ...b, selected }))
-    })
-  }
-
-  // 添加批次
-  const addBatch = (batch: Batch) => {
-    if (!workspaceData) return
-    setWorkspaceData({
-      ...workspaceData,
-      batches: [...workspaceData.batches, batch]
-    })
-  }
-
-  // 更新批次
-  const updateBatch = (id: number, updates: Partial<Batch>) => {
-    if (!workspaceData) return
-    setWorkspaceData({
-      ...workspaceData,
-      batches: workspaceData.batches.map(b =>
-        b.id === id ? { ...b, ...updates } : b
-      )
-    })
-  }
-
-  // 自动保存
   useEffect(() => {
-    if (workspaceData && isWorkspaceOpen) {
-      saveWorkspaceData()
+    if (appState && isWorkspaceOpen) {
+      window.electronAPI.saveWorkspace(appState).catch(console.error)
     }
-  }, [workspaceData])
+  }, [appState])
+
+  // ── 预下载列表 ───────────────────────────────────────────────────────────
+
+  const addToPending = (books: PendingBook[]) => {
+    setAppState(prev => {
+      if (!prev) return prev
+      const existingIds = new Set(prev.pending.map(b => b.id))
+      const newBooks = books.filter(b => !existingIds.has(b.id))
+      return { ...prev, pending: [...prev.pending, ...newBooks] }
+    })
+  }
+
+  const removeFromPending = (ids: number[]) => {
+    const idSet = new Set(ids)
+    setAppState(prev => {
+      if (!prev) return prev
+      return { ...prev, pending: prev.pending.filter(b => !idSet.has(b.id)) }
+    })
+  }
+
+  // ── 批次摘要 ─────────────────────────────────────────────────────────────
+
+  const addBatchSummary = (batch: BatchSummary) => {
+    setAppState(prev => {
+      if (!prev) return prev
+      return { ...prev, batches: [...prev.batches, batch] }
+    })
+  }
+
+  const updateBatchSummary = (id: number, updates: Partial<BatchSummary>) => {
+    setAppState(prev => {
+      if (!prev) return prev
+      return {
+        ...prev,
+        batches: prev.batches.map(b => b.id === id ? { ...b, ...updates } : b)
+      }
+    })
+  }
+
+  // ── 搜索结果 ─────────────────────────────────────────────────────────────
+
+  const setSearchResults = (books: BookResult[]) => {
+    setSearchResultsState(books)
+    setSearchResultSelectedKeys([])
+  }
+
+  const appendSearchResults = (books: BookResult[]) => {
+    setSearchResultsState(prev => {
+      const existingIds = new Set(prev.map(b => b.id))
+      return [...prev, ...books.filter(b => !existingIds.has(b.id))]
+    })
+  }
+
+  const removeFromSearchResults = (ids: number[]) => {
+    const idSet = new Set(ids)
+    setSearchResultsState(prev => prev.filter(b => !idSet.has(b.id)))
+    setSearchResultSelectedKeys(prev => prev.filter(k => !idSet.has(k)))
+  }
+
+  const clearSearchResults = () => {
+    setSearchResultsState([])
+    setSearchResultSelectedKeys([])
+  }
+
+  const toggleSearchResultSelection = (id: number) => {
+    setSearchResultSelectedKeys(prev =>
+      prev.includes(id) ? prev.filter(k => k !== id) : [...prev, id]
+    )
+  }
+
+  const selectAllSearchResults = (selected: boolean) => {
+    setSearchResultSelectedKeys(selected ? searchResults.map(b => b.id) : [])
+  }
+
+  const clearSearchResultSelection = () => setSearchResultSelectedKeys([])
+
+  // ── 下载中状态 ───────────────────────────────────────────────────────────
+
+  const updateActiveDownload = (updates: Partial<ActiveDownload>) => {
+    setActiveDownload(prev => prev ? { ...prev, ...updates } : null)
+  }
 
   return (
     <WorkspaceContext.Provider value={{
       isWorkspaceOpen,
       workspacePath,
-      workspaceData,
+      appState,
       currentPage,
       isLoading,
+      searchResults,
+      searchResultSelectedKeys,
+      activeDownload,
       openWorkspace,
       closeWorkspace,
-      saveWorkspaceData,
       setCurrentPage,
       addToPending,
       removeFromPending,
-      updatePendingSelection,
-      selectAllPending,
-      addBatch,
-      updateBatch
+      addBatchSummary,
+      updateBatchSummary,
+      setSearchResults,
+      appendSearchResults,
+      removeFromSearchResults,
+      clearSearchResults,
+      toggleSearchResultSelection,
+      selectAllSearchResults,
+      clearSearchResultSelection,
+      setActiveDownload,
+      updateActiveDownload,
     }}>
       {children}
     </WorkspaceContext.Provider>
@@ -234,8 +312,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
 export function useWorkspace() {
   const context = useContext(WorkspaceContext)
-  if (!context) {
-    throw new Error('useWorkspace must be used within WorkspaceProvider')
-  }
+  if (!context) throw new Error('useWorkspace must be used within WorkspaceProvider')
   return context
 }
