@@ -69,7 +69,7 @@ export function Sidebar() {
           letterSpacing: '0.5px'
         }}
       >
-        v0.1.1
+        v0.2.0
       </div>
     </div>
   )
