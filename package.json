@@ -1,12 +1,13 @@
 {
   "name": "bookweaver-gui",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Project Gutenberg 书籍下载工具 - GUI 版本",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build && electron-builder",
+    "build": "npm run build:backend && tsc && vite build && electron-builder",
     "build:frontend": "vite build",
+    "build:backend": "python build_backend.py",
     "preview": "vite preview",
     "dev:backend": "cd backend && python -m uvicorn main:app --reload --port 8765",
     "package:mac": "electron-builder --mac",

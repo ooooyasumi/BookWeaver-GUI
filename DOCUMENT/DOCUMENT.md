@@ -22,7 +22,7 @@
 
 ### 版本信息
 
-- **当前版本**: v0.1.0
+- **当前版本**: v0.2.1
 - **Node.js 要求**: 18+
 - **Python 要求**: 3.9+
 - **许可证**: MIT
@@ -33,9 +33,9 @@
 |------|------|
 | 工作区系统 | 类似编辑器的工作区模式，数据持久化 |
 | 书籍搜索 | 搜索 Gutenberg 目录（77,000+ 书籍） |
-| 下载管理 | 批量下载、进度跟踪、批次管理 |
-| AI 助手 | 自然语言交互（框架已完成） |
-| 设置 | LLM 配置、下载配置 |
+| 下载管理 | 批量下载、进度跟踪、批次管理、实时网速显示、暂停续传 |
+| AI 助手 | 自然语言交互，Plan-Execute-Verify-Reply 四阶段 Harness |
+| 图书管理 | 浏览已下载 EPUB、封面/简介/分类/年份展示、索引缓存 |
 
 ### 技术栈
 
@@ -123,6 +123,8 @@ bookweaver-gui/
 ├── tsconfig.json             # TypeScript 配置
 ├── vite.config.ts            # Vite 配置
 ├── electron-builder.yml      # 打包配置
+├── dev.py                    # 开发服务器启动脚本
+├── build_backend.py          # 后端打包脚本（PyInstaller）
 ├── CHANGELOG.md              # 版本记录
 │
 ├── electron/                 # Electron 主进程
@@ -146,7 +148,7 @@ bookweaver-gui/
 │   └── styles/              # 样式文件
 │       └── globals.css
 │
-├── backend/                  # Python 后端
+├── backend/                  # Python 后端（源码）
 │   ├── main.py              # FastAPI 入口
 │   ├── config.py            # 配置模型
 │   ├── api/                 # API 路由
@@ -160,6 +162,9 @@ bookweaver-gui/
 │   │   ├── matcher.py       # 匹配算法
 │   │   └── downloader.py    # 下载器
 │   └── requirements.txt     # Python 依赖
+│
+├── dist-backend/            # 打包后的后端可执行文件（PyInstaller 输出）
+│   └── bookweaver-backend
 │
 ├── DOCUMENT/                 # 文档目录
 │   └── DOCUMENT.md          # 开发文档
@@ -455,37 +460,44 @@ interface Config {
 工作区目录/
 ├── .bookweaver/
 │   ├── config.json           # 用户配置
-│   ├── workspace.json        # 工作区状态
-│   ├── ai_context.json       # AI 对话上下文
+│   ├── state.json            # 工作区状态（预下载列表 + 批次摘要）
 │   └── downloads/            # 下载记录
-│       ├── batch_1.json
-│       └── batch_2.json
+│       ├── batch_1/
+│       │   └── meta.json     # 批次详情（书籍列表 + 下载结果）
+│       └── batch_2/
+│           └── meta.json
 ├── 下载1/                    # 批次1下载文件
 └── 下载2/                    # 批次2下载文件
 ```
 
-### workspace.json
+### state.json
 
 ```json
 {
-  "version": "1.0",
-  "createdAt": "2026-03-26T10:00:00Z",
-  "updatedAt": "2026-03-26T12:00:00Z",
-  "pendingDownloads": [...],
-  "currentBatch": null,
-  "batches": [...]
+  "version": "2.0",
+  "pending": [
+    { "id": 1342, "title": "Pride and Prejudice", "author": "Austen, Jane", "language": "en" }
+  ],
+  "batches": [
+    { "id": 1, "name": "下载1", "status": "completed", "total": 10, "success": 9, "failed": 1, "outputDir": "/path/to/下载1" }
+  ]
 }
 ```
 
-### ai_context.json
+### batch_N/meta.json
 
 ```json
 {
-  "history": [
-    { "role": "user", "content": "推荐一些经典小说" },
-    { "role": "assistant", "content": "我推荐以下书籍..." }
+  "batchId": 1,
+  "name": "下载1",
+  "books": [
+    { "id": 1342, "title": "Pride and Prejudice", "author": "Austen, Jane", "language": "en" }
   ],
-  "bookList": [...]
+  "completedIds": [1342, 1343],
+  "results": {
+    "1342": { "success": true, "filePath": "/path/to/1342.epub" },
+    "1343": { "success": false, "error": "404 Not Found" }
+  }
 }
 ```
 
@@ -510,17 +522,28 @@ pip install -r requirements.txt
 ### 启动开发服务器
 
 ```bash
-# 终端 1: 启动后端
-cd backend
-python -m uvicorn main:app --reload --port 8765
-
-# 终端 2: 启动前端
-npm run dev
+# 仅需一行命令，同时启动前端 + 后端
+python dev.py
 ```
+
+这会同时启动：
+- 前端：Vite + Electron（开发模式）
+- 后端：FastAPI :8765（带热重载）
+
+按 `Ctrl+C` 退出并关闭所有服务。
 
 ### 打包
 
 ```bash
+# 构建生产版本（自动打包后端 + 打包 Electron）
+npm run build
+
+# 仅打包前端
+npm run build:frontend
+
+# 仅打包后端（PyInstaller）
+npm run build:backend
+
 # macOS
 npm run package:mac
 
@@ -539,8 +562,43 @@ ruff check backend/
 
 # 类型检查
 mypy backend/
+
+# TypeScript 类型检查
+npx tsc --noEmit
 ```
 
 ---
 
-*最后更新：2026-03-26*
+## 人机交互规则
+
+### 任务确认规则
+
+| 场景 | 规则 |
+|------|------|
+| 你说"列方案" | 先给出逻辑方案和最终效果，你确认后再做 |
+| 其他需求 | 直接做，不等确认 |
+| 涉及 git 操作 | 必须你确认才执行（commit、push、tag） |
+
+### 做事风格
+
+| 原则 | 说明 |
+|------|------|
+| 精准结论 | 直接给出结论，不绕弯子、不说"可能"、"也许" |
+| 先诊断再动手 | 遇到问题先找根因，不盲目重试 |
+| 大事商量 | 遇到不确定或影响面大的问题，主动跟你商量 |
+| 被动执行 | 你不说的我不做，你说了我才动 |
+
+### 版本发布规则
+
+只有当你说"推版本"时，才执行以下操作：
+1. 更新 CHANGELOG.md
+2. 更新 README.md（如有需要）
+3. 更新 DOCUMENT.md（如有需要）
+4. git commit
+5. git push
+6. 创建并推送 git tag（如是新版本）
+7. 触发 CI/CD
+
+---
+
+*最后更新：2026-04-01*

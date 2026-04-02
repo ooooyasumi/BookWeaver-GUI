@@ -9,6 +9,7 @@ Project Gutenberg 书籍下载工具 - GUI 版本
 - 🤖 **AI 助手**: 自然语言交互，一句话批量推荐书籍（支持 1000+ 本大批量任务）
 - ⬇️ **批量下载**: 并发下载，实时网速显示，支持暂停/继续
 - 📊 **下载管理**: 预下载 / 下载中 / 已完成三态管理，断点续传
+- 📚 **图书管理**: 浏览已下载 EPUB，显示封面/简介/分类/年份，多视图（文件夹/分类/年份），索引缓存
 - ⚙️ **设置**: LLM API 配置、下载并发数设置
 
 ## 技术栈
@@ -29,14 +30,14 @@ bookweaver-gui/
 │   ├── components/   # UI 组件
 │   │   ├── Search/   # 搜索页面 + AI 助手对话框
 │   │   ├── Download/ # 下载管理页面
-│   │   ├── Library/  # 图书管理（待开发）
+│   │   ├── Library/  # 图书管理（封面/简介/分类/年份，索引缓存）
 │   │   ├── Layout/   # 布局组件
 │   │   ├── Common/   # 通用组件（BookList 等）
 │   │   └── Settings/ # 设置弹窗
 │   └── contexts/     # React Context（WorkspaceContext 全局状态）
 ├── backend/          # Python FastAPI 后端
 │   ├── api/          # API 路由（books / download / chat）
-│   └── core/         # 核心功能（catalog 目录解析 / downloader 下载器）
+│   └── core/         # 核心功能（catalog 目录解析 / downloader 下载器 / epub_meta EPUB元数据）
 ├── resources/        # 打包资源（图标等）
 └── dev.py            # 一键启动开发服务器（前后端）
 ```

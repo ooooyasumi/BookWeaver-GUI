@@ -5,7 +5,7 @@ import { useWorkspace } from '../../contexts/WorkspaceContext'
 
 const { Title, Text } = Typography
 
-const APP_VERSION = '0.2.0'
+const APP_VERSION = '0.2.1'
 
 export function WelcomePage() {
   const { openWorkspace, isLoading } = useWorkspace()
@@ -69,24 +69,15 @@ export function WelcomePage() {
         background: 'var(--bg-primary)'
       }}
     >
-      {/* 顶部拖动区域 */}
+      {/* 顶部拖动区域（无内容，仅保留 macOS 红绿灯空间） */}
       <div
         className="title-bar-drag"
         style={{
           height: 52,
           flex: '0 0 52px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'flex-start',
-          paddingLeft: 80,
           background: 'var(--sidebar-bg)',
         }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 18, lineHeight: 1 }}>📖</span>
-          <Text strong style={{ fontSize: 15, color: '#fff', letterSpacing: '-0.3px' }}>BookWeaver</Text>
-        </div>
-      </div>
+      />
 
       {/* 主内容区 */}
       <div

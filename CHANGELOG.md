@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-04-02
+
+### Added
+
+- **图书管理页面（LibraryPage）正式上线**
+  - 基于 EPUB 文件内部元数据（ebooklib）展示书籍信息
+  - 四种浏览视图：全部列表 / 文件夹树 / 按分类 / 按出版年份（50年分段）
+  - 列表项显示书名、作者、出版年份、分类标签、语言、文件大小
+  - 点击书籍弹出详情抽屉，动态加载封面图片、书籍简介、分类、出版商、版权等
+  - 索引缓存机制：首次扫描后写入 `.bookweaver/library_index.json`，增量更新（按文件指纹检测变化）
+  - "重建索引"按钮强制全量重扫工作区所有 EPUB 文件
+
+### Changed
+
+- 后端 EPUB 解析库从 `epub` 切换为 `ebooklib`，正确读取 Dublin Core 元数据
+- `requirements.txt` 更新：`epub` → `ebooklib>=0.18` + `lxml>=4.9.0`
+- Library API 新增 `GET /api/library/detail` 接口（封面 base64 + 简介）
+- Library API 新增 `POST /api/library/reindex` 接口（强制重建索引）
+
 ## [0.2.0] - 2026-04-01
 
 ### Added

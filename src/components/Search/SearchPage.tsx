@@ -1,8 +1,11 @@
 import { useState, useRef } from 'react'
-import { Input, Button, Space, message, Checkbox, FloatButton, Drawer, Card } from 'antd'
+import { Input, Button, Space, message, Checkbox, Drawer, Card, Segmented } from 'antd'
 import { SearchOutlined, MessageOutlined, SendOutlined, PlusOutlined } from '@ant-design/icons'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { BookList } from '../Common/BookList'
+
+// 搜索类型
+type SearchType = 'title' | 'author' | 'subject' | 'year'
 
 interface Message {
   role: 'user' | 'assistant' | 'system'
@@ -35,8 +38,10 @@ export function SearchPage() {
     selectAllSearchResults,
     clearSearchResultSelection
   } = useWorkspace()
-  const [searchTitle, setSearchTitle] = useState('')
-  const [searchAuthor, setSearchAuthor] = useState('')
+
+  // 搜索相关状态
+  const [searchText, setSearchText] = useState('')
+  const [searchType, setSearchType] = useState<SearchType>('title')
   const [loading, setLoading] = useState(false)
 
   const selectedRowKeys = searchResultSelectedKeys
@@ -49,16 +54,39 @@ export function SearchPage() {
 
   // 搜索书籍
   const handleSearch = async () => {
-    if (!searchTitle.trim() && !searchAuthor.trim()) {
-      message.warning('请输入书名或作者')
+    if (!searchText.trim()) {
+      message.warning('请输入搜索内容')
       return
     }
 
     setLoading(true)
     try {
-      const response = await fetch(
-        `/api/books/search?title=${encodeURIComponent(searchTitle)}&author=${encodeURIComponent(searchAuthor)}&limit=100`
-      )
+      // 根据搜索类型构建查询参数
+      const params = new URLSearchParams()
+      params.set('limit', '1000')
+
+      switch (searchType) {
+        case 'title':
+          params.set('title', searchText)
+          break
+        case 'author':
+          params.set('author', searchText)
+          break
+        case 'subject':
+          params.set('subject', searchText)
+          break
+        case 'year':
+          const year = parseInt(searchText, 10)
+          if (isNaN(year)) {
+            message.warning('请输入有效的年份')
+            setLoading(false)
+            return
+          }
+          params.set('year', year.toString())
+          break
+      }
+
+      const response = await fetch(`/api/books/search?${params.toString()}`)
       const data = await response.json()
       setSearchResults(data.results || [])
       clearSearchResultSelection()
@@ -268,24 +296,26 @@ export function SearchPage() {
     <div>
       {/* 搜索卡片 */}
       <Card className="card" style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Input
-            placeholder="书名"
-            value={searchTitle}
-            onChange={e => setSearchTitle(e.target.value)}
-            onPressEnter={handleSearch}
-            style={{ flex: 2 }}
-            size="large"
-            allowClear
-          />
-          <Input
-            placeholder="作者"
-            value={searchAuthor}
-            onChange={e => setSearchAuthor(e.target.value)}
+            placeholder="输入搜索内容"
+            value={searchText}
+            onChange={e => setSearchText(e.target.value)}
             onPressEnter={handleSearch}
             style={{ flex: 1 }}
             size="large"
             allowClear
+          />
+          <Segmented
+            value={searchType}
+            onChange={(val) => setSearchType(val as SearchType)}
+            options={[
+              { label: '书名', value: 'title' },
+              { label: '作者', value: 'author' },
+              { label: '分类', value: 'subject' },
+              { label: '年份', value: 'year' },
+            ]}
+            size="large"
           />
           <Button
             type="primary"
@@ -296,6 +326,16 @@ export function SearchPage() {
             style={{ flexShrink: 0 }}
           >
             搜索
+          </Button>
+          <Button
+            type="primary"
+            icon={<MessageOutlined />}
+            onClick={() => setAiDrawerOpen(true)}
+            size="large"
+            className="ai-assistant-btn"
+            style={{ flexShrink: 0 }}
+          >
+            AI
           </Button>
         </div>
       </Card>
@@ -313,6 +353,28 @@ export function SearchPage() {
             >
               全选
             </Checkbox>
+            <Button size="small" onClick={() => {
+              const keys = searchResults.slice(0, 100).map(b => b.id)
+              selectAllSearchResults(false)
+              keys.forEach(id => {
+                if (!selectedRowKeys.includes(id)) {
+                  toggleSearchResultSelection(id)
+                }
+              })
+            }}>
+              前100条
+            </Button>
+            <Button size="small" onClick={() => {
+              const keys = searchResults.slice(0, 300).map(b => b.id)
+              selectAllSearchResults(false)
+              keys.forEach(id => {
+                if (!selectedRowKeys.includes(id)) {
+                  toggleSearchResultSelection(id)
+                }
+              })
+            }}>
+              前300条
+            </Button>
             <span style={{ color: 'var(--text-secondary)' }}>
               已选 {selectedRowKeys.length} 本
             </span>
@@ -351,15 +413,6 @@ export function SearchPage() {
             }
           }
         }}
-      />
-
-      {/* AI 悬浮按钮 */}
-      <FloatButton
-        icon={<MessageOutlined />}
-        type="primary"
-        onClick={() => setAiDrawerOpen(true)}
-        tooltip="AI 助手"
-        style={{ right: 32, bottom: 32 }}
       />
 
       {/* AI 对话抽屉 */}

@@ -207,3 +207,45 @@ def validate_books(queries: list[dict], catalog: list[dict]) -> dict:
         "total": total,
         "match_rate": match_rate
     }
+
+
+def match_subject(
+    input_subject: str,
+    catalog_subjects: str,
+    threshold: float = 60.0
+) -> Tuple[bool, float]:
+    """
+    模糊匹配分类/主题.
+
+    Args:
+        input_subject: 输入的分类/主题
+        catalog_subjects: 目录中的分类字符串（可能有多个，用分号分隔）
+        threshold: 匹配阈值
+
+    Returns:
+        (是否匹配, 置信度)
+    """
+    if not input_subject or not catalog_subjects:
+        return False, 0
+
+    # 标准化输入
+    input_norm = input_subject.lower().strip()
+
+    # 目录中的分类可能是分号分隔的，处理一下
+    subjects = [s.strip().lower() for s in catalog_subjects.split(";")]
+
+    best_score = 0
+
+    for subj in subjects:
+        if not subj:
+            continue
+
+        # 精确匹配
+        if input_norm in subj or subj in input_norm:
+            best_score = max(best_score, 90.0)
+        else:
+            # 模糊匹配
+            score = fuzz.token_sort_ratio(input_norm, subj)
+            best_score = max(best_score, score)
+
+    return best_score >= threshold, best_score

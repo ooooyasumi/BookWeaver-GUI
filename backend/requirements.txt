@@ -14,3 +14,11 @@ rapidfuzz>=3.6.0
 
 # LLM
 openai>=1.0.0
+
+# EPUB 解析
+ebooklib>=0.18
+lxml>=4.9.0
+six>=1.16.0
+
+# 打包
+pyinstaller>=6.0.0

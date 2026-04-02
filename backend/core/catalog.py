@@ -59,6 +59,8 @@ def parse_catalog(csv_text: str) -> list[dict]:
     - Title: 书名
     - Authors: 作者
     - Language: 语言代码
+    - Subjects: 分类/主题
+    - Issued: 出版日期
 
     Args:
         csv_text: CSV 文本
@@ -97,6 +99,19 @@ def parse_catalog(csv_text: str) -> list[dict]:
         language = row.get("Language") or "en"
         language = language.strip().lower() if language else "en"
 
+        # 获取分类/主题
+        subjects = row.get("Subjects") or ""
+        subjects = subjects.strip() if subjects else ""
+
+        # 获取出版年份
+        issued = row.get("Issued") or ""
+        year = None
+        if issued and len(issued) >= 4:
+            try:
+                year = int(issued[:4])
+            except ValueError:
+                pass
+
         # 构建 EPUB URL (Gutenberg 的 EPUB URL 格式固定)
         epub_url_images = f"https://www.gutenberg.org/ebooks/{book_id_int}.epub.images"
         epub_url_noimages = f"https://www.gutenberg.org/ebooks/{book_id_int}.epub.noimages"
@@ -111,6 +126,8 @@ def parse_catalog(csv_text: str) -> list[dict]:
             "title": title,
             "author": author,
             "language": language,
+            "subjects": subjects,
+            "year": year,
             "formats": formats
         })
 
@@ -154,6 +171,8 @@ def search_books(
     catalog: list[dict],
     title: Optional[str] = None,
     author: Optional[str] = None,
+    subject: Optional[str] = None,
+    year: Optional[int] = None,
     language: str = "en",
     limit: int = 10
 ) -> list[dict]:
@@ -162,18 +181,20 @@ def search_books(
 
     Args:
         catalog: 目录列表
-        title: 书名或关键词（可选，如果为空则返回热门书籍）
+        title: 书名或关键词
         author: 作者
+        subject: 分类/主题
+        year: 出版年份
         language: 语言代码
         limit: 返回数量限制
 
     Returns:
         匹配的书籍列表
     """
-    from .matcher import match_title, match_author
+    from .matcher import match_title, match_author, match_subject
 
-    # 如果 title 和 author 都为空，返回热门书籍
-    if not title and not author:
+    # 如果没有任何搜索条件，返回热门书籍
+    if not title and not author and not subject and not year:
         return get_popular_books(catalog, limit=limit)
 
     # 如果是通用关键词，也返回热门书籍
@@ -187,6 +208,12 @@ def search_books(
         # 语言匹配
         if language and book.get("language") != language:
             continue
+
+        # 出版年份匹配
+        if year is not None:
+            book_year = book.get("year")
+            if book_year is None or abs(book_year - year) > 5:  # 允许前后5年误差
+                continue
 
         # 书名匹配
         title_score = 0
@@ -202,25 +229,37 @@ def search_books(
             if not matched:
                 continue
 
-        # 计算综合评分
-        if title or author:
-            if title and author:
-                score = title_score * 0.4 + author_score * 0.6
-            elif title:
-                score = title_score
-            else:
-                score = author_score
-        else:
-            score = 0
+        # 分类/主题匹配
+        subject_score = 0
+        if subject:
+            matched, subject_score = match_subject(subject, book.get("subjects", ""))
+            if not matched:
+                continue
 
-        results.append({
-            "id": book["id"],
-            "title": book["title"],
-            "author": book["author"],
-            "language": book["language"],
-            "matchScore": round(score, 1),
-            "formats": book.get("formats", {})
-        })
+        # 计算综合评分
+        score = 0
+        if title:
+            score += title_score * 0.4
+        if author:
+            score += author_score * 0.4
+        if subject:
+            score += subject_score * 0.2
+
+        # 如果没有任何匹配条件但有年份筛选，给个基础分
+        if not title and not author and not subject and year is not None:
+            score = 50
+
+        if score > 0:
+            results.append({
+                "id": book["id"],
+                "title": book["title"],
+                "author": book["author"],
+                "language": book["language"],
+                "subjects": book.get("subjects", ""),
+                "year": book.get("year"),
+                "matchScore": round(score, 1),
+                "formats": book.get("formats", {})
+            })
 
     # 按匹配度排序
     results.sort(key=lambda x: x["matchScore"], reverse=True)

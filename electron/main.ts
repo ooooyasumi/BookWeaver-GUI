@@ -45,19 +45,16 @@ function startPythonBackend() {
     return
   }
 
+  // 生产模式：启动 PyInstaller 打包的后端可执行文件
   const resourcesPath = process.resourcesPath
-  const pythonPath = process.platform === 'win32'
-    ? path.join(resourcesPath, 'python', 'python.exe')
-    : path.join(resourcesPath, 'python', 'bin', 'python3')
+  const backendExe = process.platform === 'win32'
+    ? path.join(resourcesPath, 'backend', 'bookweaver-backend.exe')
+    : path.join(resourcesPath, 'backend', 'bookweaver-backend')
 
-  const backendPath = path.join(resourcesPath, 'backend')
-
-  pythonProcess = spawn(pythonPath, [
-    '-m', 'uvicorn', 'main:app',
+  pythonProcess = spawn(backendExe, [
     '--host', '127.0.0.1',
     '--port', '8765'
   ], {
-    cwd: backendPath,
     stdio: 'inherit'
   })
 

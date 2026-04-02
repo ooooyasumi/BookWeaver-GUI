@@ -555,3 +555,58 @@ body {
   background: rgba(255, 59, 48, 0.1);
   border: 1px solid var(--error-color);
 }
+
+/* AI 助手按钮 - 悬停渐变动效 */
+.ai-assistant-btn {
+  background: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+}
+
+/* Ant Design Button hover 时使用渐变背景 */
+.ant-btn.ai-assistant-btn {
+  background: var(--accent-color) !important;
+  border-color: var(--accent-color) !important;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.ant-btn.ai-assistant-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 300%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  transform: skewX(-20deg);
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.ant-btn.ai-assistant-btn:hover {
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow: 0 0 15px rgba(72, 219, 251, 0.5);
+  transform: scale(1.02);
+}
+
+.ant-btn.ai-assistant-btn:hover::before {
+  opacity: 1;
+  animation: shine-slide 1.5s infinite;
+}
+
+@keyframes shine-slide {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 200%;
+  }
+}

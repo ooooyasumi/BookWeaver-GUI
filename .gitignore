@@ -12,6 +12,7 @@ ENV/
 # Build output
 dist/
 dist-electron/
+dist-backend/
 release/
 *.egg-info/
 .eggs/
@@ -44,3 +45,6 @@ yarn-error.log*
 
 # Python embed
 python-embed/
+
+# Reference folder
+reference/

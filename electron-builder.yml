@@ -13,10 +13,7 @@ win:
   icon: resources/icon.png
 
 extraResources:
-  - from: "python-embed"
-    to: "python"
-    filter: ["**/*"]
-  - from: "backend"
+  - from: "dist-backend"
     to: "backend"
     filter: ["**/*"]
 

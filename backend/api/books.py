@@ -17,14 +17,16 @@ router = APIRouter()
 async def search(
     title: Optional[str] = Query(None, description="书名或关键词"),
     author: Optional[str] = Query(None, description="作者"),
+    subject: Optional[str] = Query(None, description="分类/主题"),
+    year: Optional[int] = Query(None, description="出版年份"),
     language: str = Query("en", description="语言代码"),
     limit: int = Query(10, description="返回数量限制")
 ):
     """
     搜索书籍.
 
-    根据书名和作者在 Gutenberg 目录中搜索匹配的书籍。
-    如果没有提供 title，返回热门/经典书籍。
+    根据书名、作者、分类或出版年份在 Gutenberg 目录中搜索匹配的书籍。
+    如果没有提供任何搜索条件，返回热门/经典书籍。
     """
     try:
         # 优先使用缓存
@@ -33,8 +35,8 @@ async def search(
             # 缓存为空，尝试联网获取
             catalog = get_catalog(cache_only=False)
 
-        # 如果没有 title 和 author，返回热门书籍
-        if not title and not author:
+        # 如果没有任何搜索条件，返回热门书籍
+        if not title and not author and not subject and not year:
             from core.catalog import get_popular_books
             results = get_popular_books(catalog, limit=limit)
         else:
@@ -42,6 +44,8 @@ async def search(
                 catalog=catalog,
                 title=title or "",
                 author=author,
+                subject=subject,
+                year=year,
                 language=language,
                 limit=limit
             )
