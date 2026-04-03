@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-03
+
+### Added
+
+- **元数据管理页面（MetadataPage）正式上线**
+  - 调用 LLM API 批量更新 EPUB 书籍元数据（简介、分类、出版年份）
+  - 左右双列布局：左侧"未更新"、右侧"已更新"，支持复选框多选
+  - 全选 / 更新选中 / 全部更新 / 重置状态操作
+  - 39 个预设分类体系，LLM 返回分类编号，前端转为分类名称展示
+  - 分类最多 3 个、去重，写入前清空旧标签
+
+- **书籍详情实时加载**
+  - 点击书籍从 EPUB 文件实时解析元数据，不再依赖索引缓存
+  - `GET /api/library/detail` 返回字段扩展：新增 title、author、language、subjects、publishYear
+  - 详情抽屉优先展示实时数据，更新后立即可见
+
+- **SSE 真正流式推送**
+  - 元数据更新改用 `asyncio.Queue + create_task`，progress_callback 实时推送事件
+  - 前端实时收到 stage（sending/receiving/writing）和 progress 事件，进度条真实可用
+
+### Fixed
+
+- **EPUB Tag 累加问题**：修复 ebooklib DC 命名空间 key 错误（`'DC'` → `'http://purl.org/dc/elements/1.1/'`），导致清空旧 subject/date/description 的逻辑从未生效，每次更新都在原有基础上追加
+- **出版年份不更新**：同上命名空间修复，date 字段现在能正确清空并写入新年份
+- **取消按钮不立即生效**：前端改用 `AbortController` 断开 SSE 连接，点击取消立即终止；同时向后端发送取消信号，后端检测到连接断开后 cancel 后台任务
+- **进度显示 0/0**：前端改用合并更新（`{ ...prev, ...data }`），确保 total 字段不被后续事件覆盖；初始化时明确设置 `success: 0, failed: 0`
+
 ## [0.2.1] - 2026-04-02
 
 ### Added

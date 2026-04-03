@@ -85,11 +85,16 @@ def extract_epub_metadata(file_path: str) -> Dict[str, Any]:
 
 def extract_epub_detail(file_path: str) -> Dict[str, Any]:
     """
-    从 EPUB 文件提取完整详情（含封面图片 base64 和书籍简介）.
-    按需调用，不缓存。
+    从 EPUB 文件提取完整详情（含封面图片 base64、书籍简介和基础元数据）.
+    按需调用，不缓存，始终从 EPUB 文件实时读取。
     """
     result: Dict[str, Any] = {
         "filePath": file_path,
+        "title": None,
+        "author": None,
+        "language": None,
+        "subjects": [],
+        "publishYear": None,
         "description": None,
         "coverBase64": None,
         "coverMediaType": None,
@@ -105,6 +110,34 @@ def extract_epub_detail(file_path: str) -> Dict[str, Any]:
 
     try:
         book = epub.read_epub(file_path, options={"ignore_ncx": True})
+
+        # 标题
+        titles = book.get_metadata("DC", "title")
+        if titles:
+            result["title"] = titles[0][0]
+
+        # 作者
+        creators = book.get_metadata("DC", "creator")
+        if creators:
+            result["author"] = creators[0][0]
+
+        # 语言
+        languages = book.get_metadata("DC", "language")
+        if languages:
+            result["language"] = languages[0][0]
+
+        # 分类/主题
+        subjects = book.get_metadata("DC", "subject")
+        if subjects:
+            result["subjects"] = [s[0] for s in subjects]
+
+        # 出版年份 — 从 date 字段解析
+        dates = book.get_metadata("DC", "date")
+        if dates:
+            date_str = dates[0][0]
+            year_match = re.search(r"(\d{4})", str(date_str))
+            if year_match:
+                result["publishYear"] = int(year_match.group(1))
 
         # 简介/描述
         descriptions = book.get_metadata("DC", "description")
@@ -209,8 +242,14 @@ def build_index(workspace_path: str) -> Dict[str, Any]:
     """
     对工作区所有 EPUB 文件建立索引并写入缓存文件.
     返回索引数据。
+
+    注意：重建索引时会保留已有的元数据状态（metadataUpdated 等）。
     """
     epub_files = scan_workspace_epubs(workspace_path)
+
+    # 尝试加载已有索引，以保留元数据状态
+    existing_index = load_index(workspace_path)
+    existing_files = existing_index.get("files", {}) if existing_index else {}
 
     index: Dict[str, Any] = {
         "version": "1.0",
@@ -225,9 +264,16 @@ def build_index(workspace_path: str) -> Dict[str, Any]:
         except OSError:
             fingerprint = ""
 
+        # 保留已有的元数据状态
+        existing_meta = existing_files.get(fp, {})
+
         index["files"][fp] = {
             **meta,
             "_fingerprint": fingerprint,
+            # 元数据管理状态 - 保留已有值或设置默认值
+            "metadataUpdated": existing_meta.get("metadataUpdated", False),
+            "metadataUpdatedAt": existing_meta.get("metadataUpdatedAt"),
+            "metadataError": existing_meta.get("metadataError"),
         }
 
     # 写入索引文件
@@ -305,9 +351,17 @@ def get_or_build_index(workspace_path: str) -> Dict[str, Any]:
         relative_path = os.path.relpath(fp, workspace_path)
         meta = extract_epub_metadata(fp)
         meta["relativePath"] = relative_path
+
+        # 保留已有的元数据状态（对于 changed 的文件）
+        existing_meta = indexed.get(fp, {})
+
         indexed[fp] = {
             **meta,
             "_fingerprint": current_files[fp],
+            # 保留已有的元数据管理状态
+            "metadataUpdated": existing_meta.get("metadataUpdated", False),
+            "metadataUpdatedAt": existing_meta.get("metadataUpdatedAt"),
+            "metadataError": existing_meta.get("metadataError"),
         }
 
     existing["files"] = indexed

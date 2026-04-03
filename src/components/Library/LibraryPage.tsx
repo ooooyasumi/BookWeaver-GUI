@@ -1,28 +1,20 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Card, Empty, Spin, Tag, Segmented, Collapse, Typography, message, Button, Drawer } from 'antd'
+import { Card, Empty, Spin, Tag, Segmented, Collapse, Typography, message, Button } from 'antd'
 import {
   BookOutlined, FolderOutlined, TagsOutlined, CalendarOutlined,
-  ReloadOutlined, FileTextOutlined, FolderOpenOutlined, LoadingOutlined
+  ReloadOutlined, FileTextOutlined
 } from '@ant-design/icons'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import {
   getLibraryFiles, getLibraryBySubject, getLibraryByYear,
-  getBookDetail, reindexLibrary,
-  EpubMetadata, EpubDetail, CategoryGroup
+  reindexLibrary,
+  EpubMetadata, CategoryGroup
 } from '../../services/api'
+import { BookDetailDrawer, formatFileSize, BookInfo } from '../Common/BookDetailDrawer'
 
 const { Text } = Typography
 
 type ViewMode = 'all' | 'folder' | 'subject' | 'year'
-
-// ─── 文件大小格式化 ──────────────────────────────────────────────────────────
-
-function formatFileSize(bytes: number): string {
-  if (bytes <= 0) return '0 B'
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`
-  return `${bytes} B`
-}
 
 // ─── 书籍列表项 ─────────────────────────────────────────────────────────────
 
@@ -70,142 +62,6 @@ function BookItem({ book, onClick }: { book: EpubMetadata; onClick: () => void }
   )
 }
 
-// ─── 书籍详情抽屉 ───────────────────────────────────────────────────────────
-
-function BookDetailDrawer({ book, open, onClose }: {
-  book: EpubMetadata | null
-  open: boolean
-  onClose: () => void
-}) {
-  const [detail, setDetail] = useState<EpubDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
-
-  // 打开时动态加载详情
-  useEffect(() => {
-    if (open && book?.filePath) {
-      setDetail(null)
-      setDetailLoading(true)
-      getBookDetail(book.filePath)
-        .then(setDetail)
-        .catch(() => message.error('加载书籍详情失败'))
-        .finally(() => setDetailLoading(false))
-    }
-  }, [open, book?.filePath])
-
-  if (!book) return null
-
-  return (
-    <Drawer
-      title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <BookOutlined style={{ color: 'var(--accent-color)' }} />
-          <span>书籍详情</span>
-        </div>
-      }
-      placement="right"
-      width={420}
-      open={open}
-      onClose={onClose}
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {/* 封面图片 */}
-        {detailLoading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} />
-            <div style={{ marginTop: 8, color: 'var(--text-tertiary)', fontSize: 13 }}>加载详情中...</div>
-          </div>
-        ) : detail?.coverBase64 ? (
-          <div style={{ textAlign: 'center' }}>
-            <img
-              src={`data:${detail.coverMediaType || 'image/jpeg'};base64,${detail.coverBase64}`}
-              alt="封面"
-              style={{
-                maxWidth: '100%', maxHeight: 360, borderRadius: 8,
-                boxShadow: '0 4px 16px rgba(0,0,0,0.15)', objectFit: 'contain'
-              }}
-            />
-          </div>
-        ) : !detailLoading ? (
-          <div style={{
-            textAlign: 'center', padding: '32px 0', background: 'var(--bg-tertiary)',
-            borderRadius: 8, color: 'var(--text-tertiary)', fontSize: 13
-          }}>
-            <BookOutlined style={{ fontSize: 40, display: 'block', marginBottom: 8, opacity: 0.3 }} />
-            无封面图片
-          </div>
-        ) : null}
-
-        {/* 基本信息 */}
-        <div>
-          <Text style={{ fontSize: 18, fontWeight: 600, display: 'block', marginBottom: 4 }}>
-            {book.title || book.fileName}
-          </Text>
-          <Text type="secondary" style={{ fontSize: 14 }}>
-            {book.author || '未知作者'}
-          </Text>
-        </div>
-
-        {/* 分类标签 */}
-        {book.subjects && book.subjects.length > 0 && (
-          <div>
-            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>分类</Text>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-              {book.subjects.map((s, i) => (
-                <Tag key={i} color="blue">{s}</Tag>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 简介 */}
-        {detail?.description && (
-          <div>
-            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 6 }}>简介</Text>
-            <div
-              style={{
-                fontSize: 14, lineHeight: 1.7, color: 'var(--text-primary)',
-                padding: '12px 16px', background: 'var(--bg-tertiary)', borderRadius: 8,
-                maxHeight: 200, overflowY: 'auto'
-              }}
-              dangerouslySetInnerHTML={{ __html: detail.description }}
-            />
-          </div>
-        )}
-
-        {/* 详细字段 */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {[
-            { label: '语言', value: book.language },
-            { label: '出版年份', value: book.publishYear },
-            { label: '文件大小', value: formatFileSize(book.fileSize) },
-            { label: '文件路径', value: book.relativePath },
-            { label: '出版商', value: detail?.publisher },
-            { label: '标识符', value: detail?.identifier },
-            { label: '版权', value: detail?.rights },
-          ].map(({ label, value }) => value && (
-            <div key={label} style={{ display: 'flex', gap: 12 }}>
-              <Text type="secondary" style={{ fontSize: 13, flexShrink: 0, width: 60 }}>{label}</Text>
-              <Text style={{ fontSize: 13, wordBreak: 'break-all' }}>{String(value)}</Text>
-            </div>
-          ))}
-        </div>
-
-        {/* 操作按钮 */}
-        <Button
-          icon={<FolderOpenOutlined />}
-          onClick={() => {
-            const dir = book.filePath.substring(0, book.filePath.lastIndexOf('/'))
-            window.electronAPI.openPath(dir)
-          }}
-          style={{ marginTop: 4 }}
-        >
-          打开所在文件夹
-        </Button>
-      </div>
-    </Drawer>
-  )
-}
-
 // ─── LibraryPage ────────────────────────────────────────────────────────────
 
 export function LibraryPage() {
@@ -217,7 +73,7 @@ export function LibraryPage() {
   const [allBooks, setAllBooks] = useState<EpubMetadata[]>([])
   const [fileTree, setFileTree] = useState<Record<string, any>>({})
   const [categories, setCategories] = useState<CategoryGroup[]>([])
-  const [selectedBook, setSelectedBook] = useState<EpubMetadata | null>(null)
+  const [selectedBook, setSelectedBook] = useState<BookInfo | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   // ── 加载数据 ────────────────────────────────────────────────────────────

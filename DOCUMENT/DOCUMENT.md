@@ -22,7 +22,7 @@
 
 ### 版本信息
 
-- **当前版本**: v0.2.1
+- **当前版本**: v0.3.0
 - **Node.js 要求**: 18+
 - **Python 要求**: 3.9+
 - **许可证**: MIT
@@ -36,6 +36,7 @@
 | 下载管理 | 批量下载、进度跟踪、批次管理、实时网速显示、暂停续传 |
 | AI 助手 | 自然语言交互，Plan-Execute-Verify-Reply 四阶段 Harness |
 | 图书管理 | 浏览已下载 EPUB、封面/简介/分类/年份展示、索引缓存 |
+| 元数据管理 | LLM 批量更新 EPUB 元数据（简介/分类/出版年份），SSE 实时进度 |
 
 ### 技术栈
 
@@ -142,6 +143,8 @@ bookweaver-gui/
 │   │   ├── Search/          # 搜索组件
 │   │   ├── Download/        # 下载组件
 │   │   ├── Library/         # 图书管理组件
+│   │   ├── Metadata/        # 元数据管理组件
+│   │   ├── Common/          # 公共组件（BookDetailDrawer 等）
 │   │   └── Settings/        # 设置组件
 │   ├── services/            # API 调用
 │   │   └── api.ts
@@ -156,11 +159,16 @@ bookweaver-gui/
 │   │   ├── download.py      # 下载 API
 │   │   ├── chat.py          # 对话 API
 │   │   ├── config.py        # 配置 API
+│   │   ├── library.py       # 图书管理 API
+│   │   ├── metadata.py      # 元数据管理 API
 │   │   └── workspace.py     # 工作区 API
 │   ├── core/                # 核心模块
 │   │   ├── catalog.py       # 目录处理
 │   │   ├── matcher.py       # 匹配算法
-│   │   └── downloader.py    # 下载器
+│   │   ├── downloader.py    # 下载器
+│   │   ├── epub_meta.py     # EPUB 元数据解析与索引
+│   │   ├── llm_harness.py   # LLM 调用封装（元数据批量查询）
+│   │   └── metadata_updater.py  # 元数据更新器
 │   └── requirements.txt     # Python 依赖
 │
 ├── dist-backend/            # 打包后的后端可执行文件（PyInstaller 输出）
@@ -213,7 +221,9 @@ interface WorkspaceContextType {
 | Sidebar | `components/Layout/Sidebar.tsx` | 侧边导航栏 |
 | SearchPage | `components/Search/SearchPage.tsx` | 搜索书籍页面 |
 | DownloadPage | `components/Download/DownloadPage.tsx` | 下载管理页面 |
-| LibraryPage | `components/Library/LibraryPage.tsx` | 图书管理页面（占位） |
+| LibraryPage | `components/Library/LibraryPage.tsx` | 图书管理页面 |
+| MetadataPage | `components/Metadata/MetadataPage.tsx` | 元数据管理页面 |
+| BookDetailDrawer | `components/Common/BookDetailDrawer.tsx` | 书籍详情抽屉（实时读取 EPUB） |
 | SettingsModal | `components/Settings/SettingsModal.tsx` | 设置弹窗 |
 
 ### Electron API
@@ -590,15 +600,47 @@ npx tsc --noEmit
 
 ### 版本发布规则
 
-只有当你说"推版本"时，才执行以下操作：
-1. 更新 CHANGELOG.md
-2. 更新 README.md（如有需要）
-3. 更新 DOCUMENT.md（如有需要）
-4. git commit
-5. git push
-6. 创建并推送 git tag（如是新版本）
-7. 触发 CI/CD
+只有当你说"推版本"时，才执行以下操作。
+
+#### 发布流程
+
+| 序号 | 操作 | 说明 |
+|------|------|------|
+| 1 | 更新 CHANGELOG.md | 记录本次版本的更新内容 |
+| 2 | 更新 README.md | 如有需要（新功能、安装方式变化等）|
+| 3 | 更新 DOCUMENT.md | 如有需要（架构变化、新增模块等）|
+| 4 | git commit | 提交所有更改 |
+| 5 | git push | 推送到 main 分支 |
+| 6 | 创建并推送 git tag | 如 `v0.2.2`，触发 CI/CD |
+| 7 | CI/CD 自动构建 | GitHub Actions 自动打包发布 |
+
+#### 版本号规则
+
+- **主版本号 (x.0.0)**：重大架构变化、不兼容更新
+- **次版本号 (0.x.0)**：新功能、较大改进
+- **修订号 (0.0.x)**：Bug修复、小改进
+
+#### CHANGELOG.md 格式
+
+```markdown
+## v0.x.x (YYYY-MM-DD)
+
+### 新增
+- 功能描述
+
+### 修复
+- 修复描述
+
+### 变更
+- 变更描述
+```
+
+#### 注意事项
+
+- 涉及 git 操作时，会先确认再执行
+- 推送 tag 后 CI/CD 会自动触发
+- 发布后可在 GitHub Releases 下载
 
 ---
 
-*最后更新：2026-04-01*
+*最后更新：2026-04-03*

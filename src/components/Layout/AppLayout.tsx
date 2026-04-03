@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar'
 import { SearchPage } from '../Search/SearchPage'
 import { DownloadPage } from '../Download/DownloadPage'
 import { LibraryPage } from '../Library/LibraryPage'
+import { MetadataPage } from '../Metadata/MetadataPage'
 import { SettingsModal } from '../Settings/SettingsModal'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { useTheme } from '../../contexts/ThemeContext'
@@ -24,6 +25,8 @@ export function AppLayout() {
         return <DownloadPage />
       case 'library':
         return <LibraryPage />
+      case 'metadata':
+        return <MetadataPage />
       default:
         return <SearchPage />
     }

@@ -1,5 +1,5 @@
 import { Menu } from 'antd'
-import { SearchOutlined, DownloadOutlined, BookOutlined } from '@ant-design/icons'
+import { SearchOutlined, DownloadOutlined, BookOutlined, TagsOutlined } from '@ant-design/icons'
 import { useWorkspace, PageType } from '../../contexts/WorkspaceContext'
 
 const menuItems = [
@@ -17,6 +17,11 @@ const menuItems = [
     key: 'library',
     icon: <BookOutlined />,
     label: '图书管理'
+  },
+  {
+    key: 'metadata',
+    icon: <TagsOutlined />,
+    label: '元数据管理'
   }
 ]
 

@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from api import books, download, chat, config, workspace, library
+from api import books, download, chat, config, workspace, library, metadata
 
 app = FastAPI(
     title="BookWeaver API",
@@ -35,6 +35,7 @@ app.include_router(download.router, prefix="/api/download", tags=["下载"])
 app.include_router(chat.router, prefix="/api/chat", tags=["对话"])
 app.include_router(config.router, prefix="/api/config", tags=["配置"])
 app.include_router(library.router, prefix="/api/library", tags=["图书管理"])
+app.include_router(metadata.router, prefix="/api/metadata", tags=["元数据管理"])
 
 
 @app.get("/api/health")

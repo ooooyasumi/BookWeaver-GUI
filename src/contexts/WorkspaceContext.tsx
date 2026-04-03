@@ -100,7 +100,7 @@ export interface Config {
   }
 }
 
-export type PageType = 'search' | 'download' | 'library'
+export type PageType = 'search' | 'download' | 'library' | 'metadata'
 
 // ─── Context 类型 ─────────────────────────────────────────────────────────────
 
