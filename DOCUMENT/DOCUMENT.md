@@ -22,7 +22,7 @@
 
 ### 版本信息
 
-- **当前版本**: v0.3.0
+- **当前版本**: v0.4.0
 - **Node.js 要求**: 18+
 - **Python 要求**: 3.9+
 - **许可证**: MIT
@@ -37,6 +37,7 @@
 | AI 助手 | 自然语言交互，Plan-Execute-Verify-Reply 四阶段 Harness |
 | 图书管理 | 浏览已下载 EPUB、封面/简介/分类/年份展示、索引缓存 |
 | 元数据管理 | LLM 批量更新 EPUB 元数据（简介/分类/出版年份），SSE 实时进度 |
+| 书籍上传 | 批量上传 EPUB 到云控平台，支持多环境选择、实时进度、失败重试、持久化记录 |
 
 ### 技术栈
 
@@ -144,6 +145,7 @@ bookweaver-gui/
 │   │   ├── Download/        # 下载组件
 │   │   ├── Library/         # 图书管理组件
 │   │   ├── Metadata/        # 元数据管理组件
+│   │   ├── Upload/          # 书籍上传组件
 │   │   ├── Common/          # 公共组件（BookDetailDrawer 等）
 │   │   └── Settings/        # 设置组件
 │   ├── services/            # API 调用
@@ -161,6 +163,7 @@ bookweaver-gui/
 │   │   ├── config.py        # 配置 API
 │   │   ├── library.py       # 图书管理 API
 │   │   ├── metadata.py      # 元数据管理 API
+│   │   ├── upload.py        # 书籍上传 API
 │   │   └── workspace.py     # 工作区 API
 │   ├── core/                # 核心模块
 │   │   ├── catalog.py       # 目录处理
@@ -168,7 +171,8 @@ bookweaver-gui/
 │   │   ├── downloader.py    # 下载器
 │   │   ├── epub_meta.py     # EPUB 元数据解析与索引
 │   │   ├── llm_harness.py   # LLM 调用封装（元数据批量查询）
-│   │   └── metadata_updater.py  # 元数据更新器
+│   │   ├── metadata_updater.py  # 元数据更新器
+│   │   └── book_uploader.py     # 书籍上传器（OSS + 云控平台 API）
 │   └── requirements.txt     # Python 依赖
 │
 ├── dist-backend/            # 打包后的后端可执行文件（PyInstaller 输出）
@@ -223,6 +227,7 @@ interface WorkspaceContextType {
 | DownloadPage | `components/Download/DownloadPage.tsx` | 下载管理页面 |
 | LibraryPage | `components/Library/LibraryPage.tsx` | 图书管理页面 |
 | MetadataPage | `components/Metadata/MetadataPage.tsx` | 元数据管理页面 |
+| UploadPage | `components/Upload/UploadPage.tsx` | 书籍上传页面 |
 | BookDetailDrawer | `components/Common/BookDetailDrawer.tsx` | 书籍详情抽屉（实时读取 EPUB） |
 | SettingsModal | `components/Settings/SettingsModal.tsx` | 设置弹窗 |
 

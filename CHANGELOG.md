@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-03
+
+### Added
+
+- **书籍上传页面（UploadPage）**
+  - 侧边栏新增"书籍上传"入口
+  - 自动识别元数据管理页面已更新的书籍，列为可上传状态
+  - 环境下拉选择：测试环境 / 法兰克福生产 / 印度生产
+  - 左列"待上传"（含失败重试） / 右列"已上传"双列布局
+  - 失败书籍优先置顶显示，悬停 tooltip 显示错误原因
+  - 支持勾选批量上传、全部上传
+  - SSE 实时进度：圆形进度条 + 当前书名 + 当前阶段（上传封面 / 上传文件 / 添加记录）
+  - 取消按钮立即生效（AbortController + 取消信号）
+  - 上传记录持久化到 `.bookweaver/upload_progress.json`
+
+- **后端上传核心逻辑（book_uploader.py）**
+  - 从 EPUB 实时提取上传所需元数据（标题、作者、简介、语言、分类、封面等）
+  - 分类支持多个（`categoryIds` 数组），精确匹配 39 个预设分类
+  - 语言代码自动转换（`en` → `English` 等后端支持格式）
+  - OSS 文件上传带重试（最多 3 次）
+  - 顺序执行，取消标志随时终止
+
+- **后端上传 API（upload.py）**
+  - `GET /api/upload/status` — 查询可上传/已上传/失败状态
+  - `POST /api/upload/start` — SSE 流式批量上传
+  - `POST /api/upload/cancel` — 取消上传
+
 ## [0.3.0] - 2026-04-03
 
 ### Added

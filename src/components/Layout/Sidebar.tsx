@@ -1,5 +1,5 @@
 import { Menu } from 'antd'
-import { SearchOutlined, DownloadOutlined, BookOutlined, TagsOutlined } from '@ant-design/icons'
+import { SearchOutlined, DownloadOutlined, BookOutlined, TagsOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import { useWorkspace, PageType } from '../../contexts/WorkspaceContext'
 
 const menuItems = [
@@ -22,6 +22,11 @@ const menuItems = [
     key: 'metadata',
     icon: <TagsOutlined />,
     label: '元数据管理'
+  },
+  {
+    key: 'upload',
+    icon: <CloudUploadOutlined />,
+    label: '书籍上传'
   }
 ]
 
@@ -74,7 +79,7 @@ export function Sidebar() {
           letterSpacing: '0.5px'
         }}
       >
-        v0.2.1
+        v0.3.0
       </div>
     </div>
   )
