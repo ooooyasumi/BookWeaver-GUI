@@ -82,6 +82,9 @@ def build():
         "--hidden-import", "ebooklib.utils",
         # 收集 certifi 的 CA 证书文件
         "--collect-data", "certifi",
+        # 强制收集所有 api/core 子模块（Windows PyInstaller 可能遗漏新增文件）
+        "--collect-submodules", "api",
+        "--collect-submodules", "core",
         # Entry file
         "main.py",
     ]

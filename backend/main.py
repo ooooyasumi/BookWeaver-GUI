@@ -11,7 +11,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from api import books, download, chat, config, workspace, library, metadata, upload, cover
+from api import books, download, chat, config, workspace, library, metadata, upload
+
+# cover 模块单独导入，便于诊断 Windows 打包问题
+try:
+    from api import cover
+    _cover_ok = True
+except Exception as e:
+    import traceback
+    print(f"[WARN] 封面管理模块加载失败: {type(e).__name__}: {e}")
+    traceback.print_exc()
+    _cover_ok = False
 
 app = FastAPI(
     title="BookWeaver API",
@@ -37,7 +47,25 @@ app.include_router(config.router, prefix="/api/config", tags=["配置"])
 app.include_router(library.router, prefix="/api/library", tags=["图书管理"])
 app.include_router(metadata.router, prefix="/api/metadata", tags=["元数据管理"])
 app.include_router(upload.router, prefix="/api/upload", tags=["书籍上传"])
-app.include_router(cover.router, prefix="/api/cover", tags=["封面管理"])
+if _cover_ok:
+    app.include_router(cover.router, prefix="/api/cover", tags=["封面管理"])
+else:
+    from fastapi import APIRouter
+    _fallback = APIRouter()
+
+    @_fallback.get("/status")
+    @_fallback.post("/thumbnails")
+    @_fallback.post("/update")
+    @_fallback.post("/cancel")
+    @_fallback.post("/reset-status")
+    async def cover_unavailable():
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "封面管理模块加载失败，请检查后端日志"}
+        )
+
+    app.include_router(_fallback, prefix="/api/cover", tags=["封面管理"])
 
 
 @app.get("/api/health")
