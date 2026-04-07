@@ -23,7 +23,7 @@ except Exception as e:
     traceback.print_exc()
     _cover_ok = False
 
-BACKEND_VERSION = "0.5.3"
+BACKEND_VERSION = "0.5.4"
 
 app = FastAPI(
     title="BookWeaver API",
