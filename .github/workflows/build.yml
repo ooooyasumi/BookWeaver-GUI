@@ -47,11 +47,16 @@ jobs:
           du -h dist-backend/bookweaver-backend
           echo "=== Ensuring executable permission ==="
           chmod +x dist-backend/bookweaver-backend
-          echo "=== Testing backend startup (5s timeout) ==="
-          timeout 5 ./dist-backend/bookweaver-backend --host 127.0.0.1 --port 18765 &
+          echo "=== Testing backend startup ==="
+          timeout 10 ./dist-backend/bookweaver-backend --host 127.0.0.1 --port 18765 &
           BACKEND_PID=$!
-          sleep 3
-          curl -sf http://127.0.0.1:18765/api/health && echo "Backend health check OK" || echo "Warning: Backend health check failed"
+          sleep 4
+          echo "=== Health check ==="
+          curl -sf http://127.0.0.1:18765/api/health && echo ""
+          echo "=== Verify upload endpoint ==="
+          curl -sf "http://127.0.0.1:18765/api/upload/status?workspacePath=/tmp" && echo " [upload OK]" || echo "Warning: upload endpoint check failed"
+          echo "=== Verify cover endpoint ==="
+          curl -sf "http://127.0.0.1:18765/api/cover/status?workspacePath=/tmp" && echo " [cover OK]" || echo "Warning: cover endpoint check failed"
           kill $BACKEND_PID 2>/dev/null || true
 
       - name: Build frontend
@@ -118,11 +123,16 @@ jobs:
           file dist-backend/bookweaver-backend.exe || (echo "ERROR: Backend file not found!" && exit 1)
           echo "=== Backend file size ==="
           du -h dist-backend/bookweaver-backend.exe
-          echo "=== Testing backend startup (5s timeout) ==="
+          echo "=== Testing backend startup (8s timeout) ==="
           ./dist-backend/bookweaver-backend.exe --host 127.0.0.1 --port 18765 &
           BACKEND_PID=$!
-          sleep 5
-          curl -sf http://127.0.0.1:18765/api/health && echo "Backend health check OK" || echo "Warning: Backend health check failed"
+          sleep 6
+          echo "=== Health check ==="
+          curl -sf http://127.0.0.1:18765/api/health && echo ""
+          echo "=== Verify upload endpoint ==="
+          curl -sf "http://127.0.0.1:18765/api/upload/status?workspacePath=C:/tmp" && echo " [upload OK]" || echo "Warning: upload endpoint check failed"
+          echo "=== Verify cover endpoint ==="
+          curl -sf "http://127.0.0.1:18765/api/cover/status?workspacePath=C:/tmp" && echo " [cover OK]" || echo "Warning: cover endpoint check failed"
           kill $BACKEND_PID 2>/dev/null || true
 
       - name: Build frontend

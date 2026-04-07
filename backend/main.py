@@ -23,10 +23,12 @@ except Exception as e:
     traceback.print_exc()
     _cover_ok = False
 
+BACKEND_VERSION = "0.5.3"
+
 app = FastAPI(
     title="BookWeaver API",
     description="Project Gutenberg 书籍下载工具后端 API",
-    version="1.0.0"
+    version=BACKEND_VERSION
 )
 
 # CORS 配置
@@ -71,7 +73,16 @@ else:
 @app.get("/api/health")
 async def health_check():
     """健康检查."""
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "version": BACKEND_VERSION,
+        "modules": {
+            "cover": _cover_ok,
+            "upload": True,
+            "metadata": True,
+            "library": True,
+        }
+    }
 
 
 if __name__ == "__main__":
