@@ -188,6 +188,7 @@ async def download_cover(
 def replace_epub_cover(epub_path: str, cover_image_path: str) -> Tuple[bool, str]:
     """替换 EPUB 文件中的封面图片.
 
+    先删除所有旧封面图片，再写入新封面，确保提取时一定是新封面。
     返回 (success, error_message)。
     """
     try:
@@ -206,7 +207,27 @@ def replace_epub_cover(epub_path: str, cover_image_path: str) -> Tuple[bool, str
         }
         media_type = media_type_map.get(ext, "image/jpeg")
 
-        # 使用 ebooklib 的 set_cover 方法
+        # 1. 收集所有旧封面 item 的 id（文件名含 cover 或类型为 ITEM_COVER）
+        old_cover_ids = set()
+        for item in book.get_items_of_type(ITEM_COVER):
+            old_cover_ids.add(item.get_id())
+        for item in book.get_items_of_type(ITEM_IMAGE):
+            if "cover" in item.get_name().lower() or item.get_id() == "cover-img":
+                old_cover_ids.add(item.get_id())
+
+        # 2. 从 book.items 中移除旧封面
+        if old_cover_ids:
+            book.items = [
+                item for item in book.items
+                if not (hasattr(item, 'get_id') and item.get_id() in old_cover_ids)
+            ]
+
+        # 3. 清除旧的 OPF cover meta
+        opf_ns = 'http://www.idpf.org/2007/opf'
+        if opf_ns in book.metadata and 'cover' in book.metadata.get(opf_ns, {}):
+            book.metadata[opf_ns]['cover'] = []
+
+        # 4. 写入新封面
         cover_name = f"cover{ext}"
         book.set_cover(cover_name, cover_data, create_page=False)
 

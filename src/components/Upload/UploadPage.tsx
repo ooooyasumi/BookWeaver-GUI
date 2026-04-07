@@ -68,23 +68,21 @@ interface UploadProgress {
 }
 
 // 筛选
-type FilterKey = 'metadataUpdated' | 'coverUpdated' | 'coverError' | 'uploaded'
+type FilterKey = 'metadataUpdated' | 'coverUpdated' | 'coverError'
 
 const FILTER_OPTIONS: { key: FilterKey; label: string; icon: React.ReactNode; color: string }[] = [
   { key: 'metadataUpdated', label: '元数据已更新', icon: <TagsOutlined />, color: '#52c41a' },
   { key: 'coverUpdated', label: '封面已更新', icon: <PictureOutlined />, color: '#52c41a' },
   { key: 'coverError', label: '封面更新失败', icon: <CloseCircleOutlined />, color: '#ff4d4f' },
-  { key: 'uploaded', label: '已上传', icon: <CloudUploadOutlined />, color: '#52c41a' },
 ]
 
-function matchesFilter(book: UploadFileInfo, filters: Set<FilterKey>, isUploaded?: boolean): boolean {
+function matchesFilter(book: UploadFileInfo, filters: Set<FilterKey>): boolean {
   if (filters.size === 0) return true
   for (const f of filters) {
     switch (f) {
       case 'metadataUpdated': if (!book.metadataUpdated) return false; break
       case 'coverUpdated': if (!book.coverUpdated) return false; break
       case 'coverError': if (!(!book.coverUpdated && book.coverError)) return false; break
-      case 'uploaded': if (!isUploaded && !book.uploadedAt) return false; break
     }
   }
   return true
@@ -217,9 +215,8 @@ export function UploadPage() {
   // 环境选择
   const [baseUrl, setBaseUrl] = useState(ENVIRONMENTS[0].value)
 
-  // 选中的文件
-  const [selectedCanUpload, setSelectedCanUpload] = useState<Set<string>>(new Set())
-  const [selectedFailed, setSelectedFailed] = useState<Set<string>>(new Set())
+  // 选中的文件（统一一个 Set）
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   // AbortController
   const [abortController, setAbortController] = useState<AbortController | null>(null)
@@ -237,18 +234,29 @@ export function UploadPage() {
     setFilters(next)
   }
 
+  // 合并所有书籍到一个列表，标记状态
+  const allBooks = useMemo(() => {
+    if (!status) return []
+    const books: (UploadFileInfo & { _status: 'failed' | 'uploaded' | 'pending' })[] = []
+    // 失败优先
+    for (const b of status.failedFiles) {
+      books.push({ ...b, _status: 'failed' })
+    }
+    // 待上传
+    for (const b of status.canUploadFiles) {
+      books.push({ ...b, _status: 'pending' })
+    }
+    // 已上传
+    for (const b of status.uploadedFiles) {
+      books.push({ ...b, _status: 'uploaded' })
+    }
+    return books
+  }, [status])
+
   // 筛选后的列表
-  const filteredCanUpload = useMemo(
-    () => (status?.canUploadFiles || []).filter(b => matchesFilter(b, filters)),
-    [status?.canUploadFiles, filters]
-  )
-  const filteredFailed = useMemo(
-    () => (status?.failedFiles || []).filter(b => matchesFilter(b, filters)),
-    [status?.failedFiles, filters]
-  )
-  const filteredUploaded = useMemo(
-    () => (status?.uploadedFiles || []).filter(b => matchesFilter(b, filters, true)),
-    [status?.uploadedFiles, filters]
+  const filteredBooks = useMemo(
+    () => allBooks.filter(b => matchesFilter(b, filters)),
+    [allBooks, filters]
   )
 
   // 加载状态
@@ -280,15 +288,11 @@ export function UploadPage() {
 
     let filesToUpload: UploadFileInfo[] = files || []
     if (!files || files.length === 0) {
-      const canUploadFiles = Array.from(selectedCanUpload).map(path => {
-        const found = status?.canUploadFiles.find(f => f.filePath === path)
+      // 从选中列表查找
+      filesToUpload = Array.from(selected).map(path => {
+        const found = allBooks.find(f => f.filePath === path)
         return { filePath: path, title: found?.title || null, author: found?.author || null }
       })
-      const failedFiles = Array.from(selectedFailed).map(path => {
-        const found = status?.failedFiles.find(f => f.filePath === path)
-        return { filePath: path, title: found?.title || null, author: found?.author || null }
-      })
-      filesToUpload = [...canUploadFiles, ...failedFiles]
     }
 
     if (filesToUpload.length === 0) {
@@ -298,8 +302,7 @@ export function UploadPage() {
 
     setUploading(true)
     setProgress({ type: 'start', total: filesToUpload.length, success: 0, failed: 0, skipped: 0 })
-    setSelectedCanUpload(new Set())
-    setSelectedFailed(new Set())
+    setSelected(new Set())
 
     const controller = new AbortController()
     setAbortController(controller)
@@ -362,13 +365,14 @@ export function UploadPage() {
     }
   }
 
-  // 全部上传
+  // 全部上传（上传所有非已上传的书籍）
   const uploadAll = () => {
-    if (!status?.canUploadFiles.length) {
+    const pending = allBooks.filter(b => b._status !== 'uploaded')
+    if (pending.length === 0) {
       message.info('没有可上传的书籍')
       return
     }
-    startUpload(status.canUploadFiles)
+    startUpload(pending)
   }
 
   // 取消上传
@@ -385,34 +389,19 @@ export function UploadPage() {
   }
 
   // 选择切换
-  const toggleCanUploadSelection = (filePath: string) => {
-    const newSelected = new Set(selectedCanUpload)
-    if (newSelected.has(filePath)) newSelected.delete(filePath)
-    else newSelected.add(filePath)
-    setSelectedCanUpload(newSelected)
-  }
-
-  const toggleFailedSelection = (filePath: string) => {
-    const newSelected = new Set(selectedFailed)
-    if (newSelected.has(filePath)) newSelected.delete(filePath)
-    else newSelected.add(filePath)
-    setSelectedFailed(newSelected)
+  const toggleSelection = (filePath: string) => {
+    const next = new Set(selected)
+    if (next.has(filePath)) next.delete(filePath)
+    else next.add(filePath)
+    setSelected(next)
   }
 
   // 全选
-  const toggleSelectAllCanUpload = (checked: boolean) => {
+  const toggleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedCanUpload(new Set(filteredCanUpload.map(f => f.filePath)))
+      setSelected(new Set(filteredBooks.map(f => f.filePath)))
     } else {
-      setSelectedCanUpload(new Set())
-    }
-  }
-
-  const toggleSelectAllFailed = (checked: boolean) => {
-    if (checked) {
-      setSelectedFailed(new Set(filteredFailed.map(f => f.filePath)))
-    } else {
-      setSelectedFailed(new Set())
+      setSelected(new Set())
     }
   }
 
@@ -432,8 +421,7 @@ export function UploadPage() {
     }
   }
 
-  const totalSelected = selectedCanUpload.size + selectedFailed.size
-  const totalPending = filteredCanUpload.length + filteredFailed.length
+  const pendingCount = allBooks.filter(b => b._status !== 'uploaded').length
 
   if (loading) {
     return (
@@ -450,8 +438,13 @@ export function UploadPage() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
           <Space size="large">
             <div>
-              <span style={{ color: 'var(--text-secondary)' }}>可上传：</span>
-              <span style={{ fontSize: 20, fontWeight: 600, color: '#1890ff' }}>{status?.canUpload || 0}</span>
+              <span style={{ color: 'var(--text-secondary)' }}>总计：</span>
+              <span style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>{status?.total || 0}</span>
+              <span style={{ color: 'var(--text-secondary)' }}> 本</span>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-secondary)' }}>待上传：</span>
+              <span style={{ fontSize: 20, fontWeight: 600, color: '#1890ff' }}>{pendingCount}</span>
               <span style={{ color: 'var(--text-secondary)' }}> 本</span>
             </div>
             <div>
@@ -509,14 +502,14 @@ export function UploadPage() {
                   type="primary"
                   icon={<CloudUploadOutlined />}
                   onClick={() => startUpload()}
-                  disabled={totalSelected === 0}
+                  disabled={selected.size === 0}
                 >
-                  上传选中 ({totalSelected})
+                  上传选中 ({selected.size})
                 </Button>
                 <Button
                   icon={<CloudUploadOutlined />}
                   onClick={uploadAll}
-                  disabled={!status?.canUploadFiles.length}
+                  disabled={pendingCount === 0}
                 >
                   全部上传
                 </Button>
@@ -532,111 +525,65 @@ export function UploadPage() {
       </Card>
 
       {/* 书籍列表 */}
-      <div style={{ flex: 1, display: 'flex', gap: 16, minHeight: 0, overflow: 'hidden' }}>
-        {/* 左侧：可上传 + 失败 */}
-        <Card
-          className="card"
-          title={
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <CloudUploadOutlined style={{ color: '#1890ff' }} />
-              <span>待上传 ({totalPending})</span>
-              {totalPending > 0 && (
-                <Checkbox
-                  checked={
-                    selectedCanUpload.size + selectedFailed.size === totalPending &&
-                    totalPending > 0
-                  }
-                  indeterminate={
-                    selectedCanUpload.size + selectedFailed.size > 0 &&
-                    selectedCanUpload.size + selectedFailed.size < totalPending
-                  }
-                  onChange={(e) => {
-                    toggleSelectAllCanUpload(e.target.checked)
-                    toggleSelectAllFailed(e.target.checked)
-                  }}
-                >
-                  全选
-                </Checkbox>
-              )}
-            </div>
-          }
-          style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-          styles={{ body: { flex: 1, overflow: 'auto', padding: '12px 16px' } }}
-        >
-          {/* 失败的文件（优先显示） */}
-          {filteredFailed.map((item, i) => (
-            <BookItem
-              key={`fail-${item.filePath || i}`}
-              book={item}
-              onClick={() => viewDetail(item)}
-              showCheckbox
-              checked={selectedFailed.has(item.filePath)}
-              onCheck={() => toggleFailedSelection(item.filePath)}
-              statusTag={
-                <Tooltip title={item.uploadError}>
-                  <Tag color="error" icon={<CloseCircleOutlined />} style={{ margin: 0 }}>
-                    失败
-                  </Tag>
-                </Tooltip>
-              }
-            />
-          ))}
-
-          {/* 可上传的文件 */}
-          {filteredCanUpload.map((item, i) => (
-            <BookItem
-              key={`can-${item.filePath || i}`}
-              book={item}
-              onClick={() => viewDetail(item)}
-              showCheckbox
-              checked={selectedCanUpload.has(item.filePath)}
-              onCheck={() => toggleCanUploadSelection(item.filePath)}
-            />
-          ))}
-
-          {(filteredCanUpload.length === 0 && filteredFailed.length === 0) && (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
-              <ExclamationCircleOutlined style={{ fontSize: 32, display: 'block', marginBottom: 8, opacity: 0.3 }} />
-              <div>{filters.size > 0 ? '没有符合筛选条件的书籍' : '没有可上传的书籍'}</div>
-              {filters.size === 0 && (
-                <div style={{ fontSize: 12, marginTop: 4 }}>请先在元数据管理页面更新书籍元数据</div>
-              )}
-            </div>
-          )}
-        </Card>
-
-        {/* 右侧：已上传 */}
-        <Card
-          className="card"
-          title={
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <CheckCircleOutlined style={{ color: '#52c41a' }} />
-              <span>已上传 ({filteredUploaded.length})</span>
-            </div>
-          }
-          style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-          styles={{ body: { flex: 1, overflow: 'auto', padding: '12px 16px' } }}
-        >
-          {filteredUploaded.map((item, i) => (
-            <BookItem
-              key={item.filePath || i}
-              book={item}
-              onClick={() => viewDetail(item)}
-              isUploaded
-              statusTag={
-                <Tag color="success" icon={<CheckCircleOutlined />} style={{ margin: 0 }}>
-                  已上传
+      <Card
+        className="card"
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <CloudUploadOutlined style={{ color: '#1890ff' }} />
+            <span>全部书籍 ({filteredBooks.length})</span>
+            {filteredBooks.length > 0 && (
+              <Checkbox
+                checked={selected.size === filteredBooks.length && filteredBooks.length > 0}
+                indeterminate={selected.size > 0 && selected.size < filteredBooks.length}
+                onChange={(e) => toggleSelectAll(e.target.checked)}
+              >
+                全选
+              </Checkbox>
+            )}
+          </div>
+        }
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        styles={{ body: { flex: 1, overflow: 'auto', padding: '12px 16px' } }}
+      >
+        {filteredBooks.map((item, i) => {
+          let statusTag: React.ReactNode = null
+          if (item._status === 'failed') {
+            statusTag = (
+              <Tooltip title={item.uploadError}>
+                <Tag color="error" icon={<CloseCircleOutlined />} style={{ margin: 0 }}>
+                  上传失败
                 </Tag>
-              }
+              </Tooltip>
+            )
+          } else if (item._status === 'uploaded') {
+            statusTag = (
+              <Tag color="success" icon={<CheckCircleOutlined />} style={{ margin: 0 }}>
+                已上传
+              </Tag>
+            )
+          }
+
+          return (
+            <BookItem
+              key={`${item._status}-${item.filePath || i}`}
+              book={item}
+              onClick={() => viewDetail(item)}
+              showCheckbox
+              checked={selected.has(item.filePath)}
+              onCheck={() => toggleSelection(item.filePath)}
+              isUploaded={item._status === 'uploaded'}
+              statusTag={statusTag}
             />
-          ))}
-          {filteredUploaded.length === 0 && (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
-              {filters.size > 0 ? '没有符合筛选条件的书籍' : '没有已上传的书籍'}
-            </div>
-          )}
-        </Card>
-      </div>
+          )
+        })}
+
+        {filteredBooks.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
+            <ExclamationCircleOutlined style={{ fontSize: 32, display: 'block', marginBottom: 8, opacity: 0.3 }} />
+            <div>{filters.size > 0 ? '没有符合筛选条件的书籍' : '工作区内没有 EPUB 文件'}</div>
+          </div>
+        )}
+      </Card>
 
       {/* 详情抽屉 */}
       <BookDetailDrawer
