@@ -9,7 +9,7 @@ mac:
   icon: resources/icon.icns
 
 win:
-  target: nsis
+  target: portable
   icon: resources/icon.png
 
 extraResources:
