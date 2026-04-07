@@ -379,9 +379,9 @@ def get_upload_status(workspace_path: str) -> Dict[str, Any]:
 
     从索引中获取所有文件，结合上传进度记录，区分可上传/已上传/失败。
     """
-    from .metadata_updater import load_index
+    from .epub_meta import get_or_build_index
 
-    index_data = load_index(workspace_path)
+    index_data = get_or_build_index(workspace_path)
     upload_progress = load_upload_progress(workspace_path)
 
     uploaded_map = upload_progress.get("uploaded", {})
