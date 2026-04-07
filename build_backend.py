@@ -60,6 +60,17 @@ def build():
         "--hidden-import", "uvicorn.protocols.websockets.auto",
         "--hidden-import", "uvicorn.lifespan",
         "--hidden-import", "uvicorn.lifespan.on",
+        # httpx 及其依赖（cover_manager 使用）
+        "--hidden-import", "httpx",
+        "--hidden-import", "httpcore",
+        "--hidden-import", "h11",
+        "--hidden-import", "anyio",
+        "--hidden-import", "anyio._backends",
+        "--hidden-import", "anyio._backends._asyncio",
+        "--hidden-import", "sniffio",
+        "--hidden-import", "certifi",
+        "--hidden-import", "httpx._transports",
+        "--hidden-import", "httpx._transports.default",
         # Entry file
         "main.py",
     ]

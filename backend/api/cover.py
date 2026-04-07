@@ -36,11 +36,19 @@ async def cover_status(workspacePath: str):
     if not workspacePath:
         raise HTTPException(status_code=400, detail="缺少 workspacePath 参数")
 
-    status = get_cover_status(workspacePath)
+    try:
+        status = get_cover_status(workspacePath)
+    except Exception as e:
+        print(f"[Cover] get_cover_status 失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取封面状态失败: {str(e)}")
 
     # 批量提取封面缩略图
     all_files = [f["filePath"] for f in status["notUpdatedFiles"] + status["updatedFiles"]]
-    thumbnails = get_cover_thumbnails(workspacePath, all_files)
+    try:
+        thumbnails = get_cover_thumbnails(workspacePath, all_files)
+    except Exception as e:
+        print(f"[Cover] get_cover_thumbnails 失败: {e}")
+        thumbnails = {}
 
     # 将缩略图信息合并到文件列表中
     for file_list in (status["notUpdatedFiles"], status["updatedFiles"]):
