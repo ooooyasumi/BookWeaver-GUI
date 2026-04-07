@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell, globalShortcut } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { spawn, ChildProcess } from 'child_process'
+import { spawn, execSync, ChildProcess } from 'child_process'
 import { WorkspaceManager, AppState, BatchMeta } from './workspace'
 
 let mainWindow: BrowserWindow | null = null
@@ -48,6 +48,49 @@ function createWindow() {
   })
 }
 
+/**
+ * 杀掉占用指定端口的旧进程（跨平台）
+ */
+function killProcessOnPort(port: number) {
+  try {
+    if (process.platform === 'win32') {
+      // Windows: 通过 netstat 找到占用端口的 PID，再用 taskkill 杀掉
+      const output = execSync(
+        `netstat -ano | findstr :${port} | findstr LISTENING`,
+        { encoding: 'utf-8', windowsHide: true }
+      )
+      const pids = new Set<string>()
+      for (const line of output.trim().split('\n')) {
+        const parts = line.trim().split(/\s+/)
+        const pid = parts[parts.length - 1]
+        if (pid && pid !== '0') pids.add(pid)
+      }
+      for (const pid of pids) {
+        try {
+          execSync(`taskkill /pid ${pid} /f /t`, { windowsHide: true })
+          console.log(`已杀掉占用端口 ${port} 的旧进程 (PID: ${pid})`)
+        } catch { /* 进程可能已退出 */ }
+      }
+    } else {
+      // macOS/Linux: 用 lsof 找进程
+      const output = execSync(
+        `lsof -ti :${port}`,
+        { encoding: 'utf-8' }
+      )
+      for (const pid of output.trim().split('\n')) {
+        if (pid) {
+          try {
+            execSync(`kill -9 ${pid}`)
+            console.log(`已杀掉占用端口 ${port} 的旧进程 (PID: ${pid})`)
+          } catch { /* 进程可能已退出 */ }
+        }
+      }
+    }
+  } catch {
+    // 没有进程占用该端口，正常情况
+  }
+}
+
 function startPythonBackend(): Promise<boolean> {
   return new Promise((resolve) => {
     if (isDev) {
@@ -79,6 +122,9 @@ function startPythonBackend(): Promise<boolean> {
     }
 
     console.log('启动后端:', backendExe)
+
+    // 先杀掉可能残留的旧后端进程
+    killProcessOnPort(8765)
 
     pythonProcess = spawn(backendExe, [
       '--host', '127.0.0.1',
@@ -150,18 +196,20 @@ async function waitForBackend(maxSeconds: number): Promise<boolean> {
 
 function stopPythonBackend() {
   if (pythonProcess) {
-    // Windows 上 kill() 默认发 SIGTERM，需要用 taskkill 强制终止
+    const pid = pythonProcess.pid
     if (process.platform === 'win32') {
       try {
-        spawn('taskkill', ['/pid', String(pythonProcess.pid), '/f', '/t'], { windowsHide: true })
+        execSync(`taskkill /pid ${pid} /f /t`, { windowsHide: true })
       } catch {
-        pythonProcess.kill()
+        try { pythonProcess.kill() } catch { /* ignore */ }
       }
     } else {
-      pythonProcess.kill()
+      try { pythonProcess.kill('SIGKILL') } catch { /* ignore */ }
     }
     pythonProcess = null
   }
+  // 兜底：无论如何都尝试杀掉占用端口的进程
+  killProcessOnPort(8765)
 }
 
 // ─── IPC Handlers ────────────────────────────────────────────────────────────
@@ -252,5 +300,9 @@ app.on('window-all-closed', () => {
 })
 
 app.on('before-quit', () => {
+  stopPythonBackend()
+})
+
+app.on('will-quit', () => {
   stopPythonBackend()
 })
