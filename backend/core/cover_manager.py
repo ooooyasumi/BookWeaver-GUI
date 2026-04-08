@@ -220,7 +220,11 @@ def replace_epub_cover(epub_path: str, cover_image_path: str) -> Tuple[bool, str
 
         cover_meta = book.get_metadata("OPF", "cover")
         if cover_meta:
-            meta_id = cover_meta[0][1].get("content", "") if len(cover_meta[0]) > 1 else cover_meta[0][0]
+            try:
+                entry = cover_meta[0]
+                meta_id = entry[1].get("content", "") if len(entry) > 1 and isinstance(entry[1], dict) else str(entry[0])
+            except Exception:
+                meta_id = ""
             if meta_id:
                 for item in book.get_items_of_type(ITEM_IMAGE):
                     if item.get_id() == meta_id:
@@ -232,48 +236,54 @@ def replace_epub_cover(epub_path: str, cover_image_path: str) -> Tuple[bool, str
                 old_cover_ids.add(item.get_id())
                 old_cover_names.add(item.get_name())
 
-        # 2. 从 book.items 中移除所有旧封面
+        # 2. 从 book.items 中移除所有旧封面（跳过 None）
         if old_cover_ids:
             book.items = [
                 item for item in book.items
-                if not (hasattr(item, 'get_id') and item.get_id() in old_cover_ids)
+                if item is None or not (hasattr(item, 'get_id') and item.get_id() in old_cover_ids)
             ]
 
-        # 3. 清除旧的 OPF cover meta
+        # 3. 清除旧的 OPF cover meta（ebooklib 结构: metadata[opf_ns]['meta'] = [...]）
         opf_ns = 'http://www.idpf.org/2007/opf'
-        if opf_ns in book.metadata and 'cover' in book.metadata.get(opf_ns, {}):
-            book.metadata[opf_ns]['cover'] = []
+        if opf_ns in book.metadata:
+            opf_data = book.metadata[opf_ns]
+            # 删除 name='cover' 的 meta 条目
+            if 'meta' in opf_data:
+                opf_data['meta'] = [
+                    entry for entry in opf_data['meta']
+                    if not (len(entry) > 1 and isinstance(entry[1], dict) and entry[1].get('name') == 'cover')
+                ]
 
         # 4. 写入新封面（set_cover 会设置 OPF meta 指向新 item）
         book.set_cover(cover_name, cover_data, create_page=False)
 
-        # 5. 更新封面 XHTML 页中的 <img> 引用
-        import re as _re
-        for item in book.get_items():
-            if not hasattr(item, 'get_content'):
-                continue
-            # 只处理 XHTML/HTML 类型
-            mt = getattr(item, 'media_type', '') or ''
-            if 'html' not in mt and 'xhtml' not in mt:
-                continue
-            try:
-                content = item.get_content().decode('utf-8')
-            except Exception:
-                continue
-            # 检查是否引用了旧封面文件名
-            changed = False
-            for old_name in old_cover_names:
-                if old_name in content:
-                    content = content.replace(old_name, cover_name)
-                    changed = True
-            if changed:
-                item.set_content(content.encode('utf-8'))
+        # 5. 更新封面 XHTML 页中的 <img> 引用（跳过 None item）
+        if old_cover_names:
+            for item in book.get_items():
+                if item is None:
+                    continue
+                mt = getattr(item, 'media_type', '') or ''
+                if 'html' not in mt and 'xhtml' not in mt:
+                    continue
+                try:
+                    content = item.get_content().decode('utf-8')
+                except Exception:
+                    continue
+                changed = False
+                for old_name in old_cover_names:
+                    if old_name in content:
+                        content = content.replace(old_name, cover_name)
+                        changed = True
+                if changed:
+                    item.set_content(content.encode('utf-8'))
 
         # 写回 EPUB
         epub.write_epub(epub_path, book, {})
         return True, ""
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return False, str(e)
 
 
