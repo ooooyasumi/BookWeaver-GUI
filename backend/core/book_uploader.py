@@ -12,10 +12,10 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
 
 import httpx
-from ebooklib import epub, ITEM_IMAGE
+from ebooklib import epub
 
 from .llm_harness import CATEGORY_MAP
-from .epub_meta import _to_rel, _to_abs
+from .epub_meta import _to_rel, _to_abs, _extract_cover_image
 
 # ==================== 配置常量 ====================
 
@@ -169,21 +169,18 @@ def extract_upload_metadata(file_path: str) -> Optional[Dict[str, Any]]:
 
 
 def _extract_cover(book: epub.EpubBook) -> Optional[Tuple[str, bytes]]:
-    """从 EPUB 提取封面图片，返回 (文件名, 数据)"""
-    # 方法1: 文件名包含 cover 的图片
-    for item in book.get_items_of_type(ITEM_IMAGE):
-        if 'cover' in item.get_name().lower() or item.get_id() == 'cover-img':
-            content = item.get_content()
-            if content and len(content) > 100:
-                return (item.get_name(), content)
-
-    # 方法2: 第一个 JPG/PNG 图片
-    for item in book.get_items_of_type(ITEM_IMAGE):
-        if item.media_type in ['image/jpeg', 'image/jpg', 'image/png']:
-            content = item.get_content()
-            if content and len(content) > 100:
-                return (item.get_name(), content)
-
+    """从 EPUB 提取封面图片，返回 (文件名, 数据)。使用统一的提取逻辑。"""
+    cover_data, cover_type = _extract_cover_image(book)
+    if cover_data:
+        # 根据 media_type 推断文件扩展名
+        ext_map = {
+            "image/jpeg": "cover.jpg",
+            "image/png": "cover.png",
+            "image/gif": "cover.gif",
+            "image/webp": "cover.webp",
+        }
+        name = ext_map.get(cover_type, "cover.jpg")
+        return (name, cover_data)
     return None
 
 
