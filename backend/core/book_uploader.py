@@ -212,27 +212,40 @@ async def upload_file_to_oss(
 ) -> Optional[str]:
     """上传文件到 OSS，返回 accessUrl"""
     url = f"{base_url}/tmms/common/uploadFile?token={TOKEN}"
+    file_size = os.path.getsize(file_path)
+    file_name = os.path.basename(file_path)
 
     for attempt in range(MAX_RETRIES):
         try:
+            print(f"[Upload] 上传 {file_name} ({file_size} bytes) 到 {base_url} (尝试 {attempt+1}/{MAX_RETRIES})")
             async with httpx.AsyncClient(timeout=timeout) as client:
                 with open(file_path, 'rb') as f:
                     files = {'file': (os.path.basename(file_path), f)}
                     response = await client.post(url, files=files)
 
+                print(f"[Upload] {file_name} 响应: status={response.status_code}")
                 if response.status_code == 200:
                     result = response.json()
                     if result.get('code') == 10000:
                         access_url = result.get('data', {}).get('accessUrl')
                         if access_url:
                             return access_url
+                        print(f"[Upload] {file_name} 响应无 accessUrl: {result}")
                         return None
-        except (httpx.TimeoutException, httpx.RequestError):
-            pass
+                    else:
+                        print(f"[Upload] {file_name} 业务错误: {result}")
+        except httpx.TimeoutException as e:
+            print(f"[Upload] {file_name} 超时: {e}")
+        except httpx.RequestError as e:
+            print(f"[Upload] {file_name} 网络错误: {e}")
+        except Exception as e:
+            print(f"[Upload] {file_name} 未知错误: {type(e).__name__}: {e}")
 
         if attempt < MAX_RETRIES - 1:
+            print(f"[Upload] {file_name} 等待 {RETRY_DELAY}s 后重试...")
             await asyncio.sleep(RETRY_DELAY)
 
+    print(f"[Upload] {file_name} 上传失败，已重试 {MAX_RETRIES} 次")
     return None
 
 
@@ -444,11 +457,13 @@ async def upload_single_book(
         { success, error, title, filePath }
     """
     title = os.path.basename(file_path)
+    print(f"[Upload] 开始处理: {file_path}")
 
     # 1. 提取元数据
     metadata = extract_upload_metadata(file_path)
     if not metadata:
         error = "无法解析 EPUB"
+        print(f"[Upload] 跳过 {title}: {error}")
         mark_skipped(workspace_path, file_path, error)
         return {"success": False, "error": error, "title": title, "filePath": file_path, "status": "skipped"}
 
@@ -457,12 +472,14 @@ async def upload_single_book(
     # 2. 验证必填字段
     valid, error_msg = validate_upload_metadata(metadata)
     if not valid:
+        print(f"[Upload] 跳过 {title}: {error_msg}")
         mark_skipped(workspace_path, file_path, error_msg)
         return {"success": False, "error": error_msg, "title": title, "filePath": file_path, "status": "skipped"}
 
     # 3. 检查封面
     if not metadata.get("cover_data"):
         error = "无法提取封面"
+        print(f"[Upload] 跳过 {title}: {error}")
         mark_skipped(workspace_path, file_path, error)
         return {"success": False, "error": error, "title": title, "filePath": file_path, "status": "skipped"}
 

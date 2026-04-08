@@ -338,12 +338,29 @@ export function UploadPage() {
               setProgress(prev => ({ ...prev, ...data }))
 
               if (data.type === 'done') {
+                const msgs: string[] = []
+                if (data.success > 0) msgs.push(`${data.success} 本成功`)
+                if (data.failed > 0) msgs.push(`${data.failed} 本失败`)
+                if (data.skipped > 0) msgs.push(`${data.skipped} 本跳过`)
+                if (msgs.length > 0) {
+                  message.info(`上传完成: ${msgs.join('，')}`)
+                }
+                // 如果有跳过的，显示原因
+                if (data.results) {
+                  for (const r of data.results) {
+                    if (r.status === 'skipped' && r.error) {
+                      message.warning(`${r.title}: ${r.error}`, 5)
+                    }
+                  }
+                }
                 setTimeout(() => {
                   loadStatus()
                   setUploading(false)
                   setProgress(null)
                   setAbortController(null)
                 }, 500)
+              } else if (data.type === 'error') {
+                message.error(`上传出错: ${data.message}`)
               }
             } catch {
               // 忽略解析错误
