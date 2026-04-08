@@ -246,6 +246,44 @@ async def upload_file_to_oss(
     return None
 
 
+async def check_duplicate(
+    name: str,
+    author: str,
+    base_url: str,
+    timeout: float = 30.0
+) -> bool:
+    """
+    检查书籍是否已存在（书名 + 作者查重）
+
+    Returns:
+        True 表示已存在（重复），False 表示不存在
+    """
+    url = f"{base_url}/tmms/pdf/book/getBooksPage?token={TOKEN}"
+    payload = {"name": name, "author": author, "size": 10, "current": 1}
+
+    for attempt in range(MAX_RETRIES):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                response = await client.post(url, json=payload)
+                if response.status_code == 200:
+                    result = response.json()
+                    if result.get('code') == 10000:
+                        records = result.get('data', {}).get('records', [])
+                        if records:
+                            print(f"[Duplicate] 发现重复书籍：《{name}》by {author}")
+                            return True
+                    return False
+        except (httpx.TimeoutException, httpx.RequestError) as e:
+            if attempt == MAX_RETRIES - 1:
+                print(f"[Duplicate] 查重失败 {name}: {e}")
+                return False  # 出错时不跳过，继续上传
+
+        if attempt < MAX_RETRIES - 1:
+            await asyncio.sleep(RETRY_DELAY)
+
+    return False
+
+
 async def add_book_to_platform(
     book_data: Dict[str, Any],
     base_url: str,
@@ -496,7 +534,17 @@ async def upload_single_book(
         mark_skipped(workspace_path, file_path, error)
         return {"success": False, "error": error, "title": title, "filePath": file_path, "status": "skipped"}
 
-    # 4. 上传封面
+    # 4. 查重（书名 + 作者）
+    book_name = metadata.get("title", "")
+    book_author = metadata.get("author", "")
+    if book_name and book_author:
+        if await check_duplicate(book_name, book_author, base_url):
+            error = "书籍已存在"
+            print(f"[Upload] 跳过 {title}: {error}")
+            mark_failed(workspace_path, file_path, error)
+            return {"success": False, "error": error, "title": title, "filePath": file_path, "status": "failed"}
+
+    # 5. 上传封面
     if progress_callback:
         await progress_callback({
             "type": "stage",
@@ -524,7 +572,7 @@ async def upload_single_book(
     if is_cancelled():
         return {"success": False, "error": "Cancelled", "title": title, "filePath": file_path, "status": "cancelled"}
 
-    # 5. 上传 EPUB 文件
+    # 6. 上传 EPUB 文件
     if progress_callback:
         await progress_callback({
             "type": "stage",
@@ -541,7 +589,7 @@ async def upload_single_book(
     if is_cancelled():
         return {"success": False, "error": "Cancelled", "title": title, "filePath": file_path, "status": "cancelled"}
 
-    # 6. 添加书籍到平台
+    # 7. 添加书籍到平台
     if progress_callback:
         await progress_callback({
             "type": "stage",

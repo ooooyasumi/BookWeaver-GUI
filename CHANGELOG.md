@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-04-08
+
+### Added
+
+- **上传前查重检测**
+  - 调用云控平台 `getBooksPage` 接口，书名+作者双重匹配判断重复
+  - 重复书籍标记为上传失败（"书籍已存在"），错误信息持久化到索引
+  - 前端失败标签悬停显示"书籍已存在"详细错误
+
+### Fixed
+
+- **封面替换必失败**：修复 OPF meta 清除方式错误（DC 命名空间）+ None 保护
+
 ## [0.6.0] - 2026-04-08
 
 ### Added
