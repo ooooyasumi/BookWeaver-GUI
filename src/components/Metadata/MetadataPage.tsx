@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Card, Button, Space, Checkbox, message, Spin, Progress, Tag, Typography } from 'antd'
-import { SyncOutlined, StopOutlined, CheckCircleOutlined, BookOutlined, FileTextOutlined } from '@ant-design/icons'
+import { SyncOutlined, StopOutlined, FileTextOutlined } from '@ant-design/icons'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { BookDetailDrawer, formatFileSize, BookInfo } from '../Common/BookDetailDrawer'
 import { BookStatusIcons } from '../Common/BookStatusIcons'
+import { BookFilter, FilterKey, matchesFilter, BookWithAllStatus } from '../Common/BookFilter'
 
 const { Text } = Typography
 
@@ -21,11 +22,15 @@ interface FileInfo {
   subjects?: string[]
   fileSize?: number
   metadataUpdated?: boolean
-  metadataError?: string
+  metadataError?: string | null
   coverUpdated?: boolean
   coverError?: string | null
   uploaded?: boolean
+  uploadError?: string | null
+  uploadedAt?: string | null
 }
+
+// ─── MetadataStatus ──────────────────────────────────────────────────────────
 
 interface MetadataStatus {
   total: number
@@ -33,17 +38,6 @@ interface MetadataStatus {
   updated: number
   notUpdatedFiles: FileInfo[]
   updatedFiles: FileInfo[]
-}
-
-interface UpdateProgress {
-  type: string
-  total?: number
-  processed?: number
-  success?: number
-  failed?: number
-  latestResults?: any[]
-  results?: any[]
-  message?: string
 }
 
 // ─── 书籍列表项 ─────────────────────────────────────────────────────────────
@@ -94,14 +88,19 @@ function BookItem({
           <div style={{ marginTop: 4 }}>
             <BookStatusIcons
               metadataUpdated={book.metadataUpdated}
+              metadataError={book.metadataError}
               coverUpdated={book.coverUpdated}
               coverError={book.coverError}
               uploaded={book.uploaded}
+              uploadError={book.uploadError}
             />
           </div>
         </div>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, marginLeft: 12 }}>
+        {book.metadataError && (
+          <Tag color="error" style={{ margin: 0 }}>元数据失败</Tag>
+        )}
         {book.subjects && book.subjects.length > 0 && (
           <Tag style={{ margin: 0, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {book.subjects[0]}
@@ -125,24 +124,37 @@ function BookItem({
 // ─── MetadataPage ─────────────────────────────────────────────────────────────
 
 export function MetadataPage() {
-  const { workspacePath } = useWorkspace()
+  const { workspacePath, activeTask, setActiveTask, updateActiveTask, cancelTask } = useWorkspace()
 
   // 状态
   const [status, setStatus] = useState<MetadataStatus | null>(null)
   const [loading, setLoading] = useState(true)
-  const [updating, setUpdating] = useState(false)
-  const [progress, setProgress] = useState<UpdateProgress | null>(null)
 
-  // 选中的文件（分别跟踪两个列表）
-  const [selectedNotUpdated, setSelectedNotUpdated] = useState<Set<string>>(new Set())
-  const [selectedUpdated, setSelectedUpdated] = useState<Set<string>>(new Set())
+  // 选中
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
-  // 用于取消 fetch 的 AbortController
-  const [abortController, setAbortController] = useState<AbortController | null>(null)
+  // 筛选
+  const [filters, setFilters] = useState<Set<FilterKey>>(new Set())
 
   // 详情抽屉
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
   const [selectedBook, setSelectedBook] = useState<BookInfo | null>(null)
+
+  // 合并所有书籍
+  const allBooks = useMemo(() => {
+    if (!status) return []
+    return [...status.notUpdatedFiles, ...status.updatedFiles]
+  }, [status])
+
+  // 筛选后的书籍
+  const filteredBooks = useMemo(
+    () => allBooks.filter(b => matchesFilter(b as BookWithAllStatus, filters)),
+    [allBooks, filters]
+  )
+
+  // 是否正在运行元数据任务
+  const isRunning = activeTask?.type === 'metadata' && activeTask.status === 'running'
+  const progress = activeTask?.progress
 
   // 加载状态
   const loadStatus = async () => {
@@ -171,20 +183,12 @@ export function MetadataPage() {
   const startUpdate = async (files?: FileInfo[]) => {
     if (!workspacePath) return
 
-    // 如果没有传入文件，从选中的文件中获取
     let filesToUpdate: FileInfo[] = files || []
     if (!files || files.length === 0) {
-      const notUpdatedFiles = Array.from(selectedNotUpdated).map(path => ({
-        filePath: path,
-        title: status?.notUpdatedFiles.find(f => f.filePath === path)?.title || null,
-        author: status?.notUpdatedFiles.find(f => f.filePath === path)?.author || null
-      }))
-      const updatedFiles = Array.from(selectedUpdated).map(path => ({
-        filePath: path,
-        title: status?.updatedFiles.find(f => f.filePath === path)?.title || null,
-        author: status?.updatedFiles.find(f => f.filePath === path)?.author || null
-      }))
-      filesToUpdate = [...notUpdatedFiles, ...updatedFiles]
+      filesToUpdate = Array.from(selected).map(path => {
+        const found = allBooks.find(f => f.filePath === path)
+        return { filePath: path, title: found?.title || null, author: found?.author || null }
+      })
     }
 
     if (filesToUpdate.length === 0) {
@@ -192,16 +196,17 @@ export function MetadataPage() {
       return
     }
 
-    // 获取配置
     const config = await window.electronAPI.getConfig()
 
-    setUpdating(true)
-    setProgress({ type: 'start', total: filesToUpdate.length, success: 0, failed: 0 })
-    setSelectedNotUpdated(new Set())
-    setSelectedUpdated(new Set())
-
     const controller = new AbortController()
-    setAbortController(controller)
+    setActiveTask({
+      id: Date.now().toString(),
+      type: 'metadata',
+      status: 'running',
+      progress: { type: 'start', total: filesToUpdate.length, success: 0, failed: 0 },
+      abortController: controller,
+    })
+    setSelected(new Set())
 
     try {
       const response = await fetch(`${API_BASE}/metadata/update`, {
@@ -231,16 +236,13 @@ export function MetadataPage() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6))
-              // 合并更新 progress，保留已有的 total 等字段
-              setProgress(prev => ({ ...prev, ...data }))
+              updateActiveTask({ progress: { ...activeTask?.progress, ...data } })
 
-              // 完成时刷新状态
               if (data.type === 'done') {
+                message.success(`更新完成: 成功 ${data.success || 0}, 失败 ${data.failed || 0}`)
                 setTimeout(() => {
+                  setActiveTask(null)
                   loadStatus()
-                  setUpdating(false)
-                  setProgress(null)
-                  setAbortController(null)
                 }, 500)
               }
             } catch {
@@ -256,14 +258,12 @@ export function MetadataPage() {
         console.error('Update error:', error)
         message.error('更新失败')
       }
-      setUpdating(false)
-      setProgress(null)
-      setAbortController(null)
+      setActiveTask(null)
       loadStatus()
     }
   }
 
-  // 全部更新（只更新未更新的）
+  // 全部更新
   const updateAll = () => {
     if (!status?.notUpdatedFiles.length) {
       message.info('没有需要更新的书籍')
@@ -272,58 +272,20 @@ export function MetadataPage() {
     startUpdate(status.notUpdatedFiles)
   }
 
-  // 取消更新
-  const cancelUpdate = async () => {
-    try {
-      // 发送取消信号给后端
-      await fetch(`${API_BASE}/metadata/cancel`, { method: 'POST' })
-      // 断开 SSE 连接
-      if (abortController) {
-        abortController.abort()
-        setAbortController(null)
-      }
-    } catch (error) {
-      console.error('Cancel error:', error)
-    }
+  // 选择切换
+  const toggleSelection = (filePath: string) => {
+    const next = new Set(selected)
+    if (next.has(filePath)) next.delete(filePath)
+    else next.add(filePath)
+    setSelected(next)
   }
 
-  // 选择未更新文件
-  const toggleNotUpdatedSelection = (filePath: string) => {
-    const newSelected = new Set(selectedNotUpdated)
-    if (newSelected.has(filePath)) {
-      newSelected.delete(filePath)
+  // 全选
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelected(new Set(filteredBooks.map(f => f.filePath)))
     } else {
-      newSelected.add(filePath)
-    }
-    setSelectedNotUpdated(newSelected)
-  }
-
-  // 选择已更新文件
-  const toggleUpdatedSelection = (filePath: string) => {
-    const newSelected = new Set(selectedUpdated)
-    if (newSelected.has(filePath)) {
-      newSelected.delete(filePath)
-    } else {
-      newSelected.add(filePath)
-    }
-    setSelectedUpdated(newSelected)
-  }
-
-  // 全选未更新
-  const toggleSelectAllNotUpdated = (checked: boolean) => {
-    if (checked && status) {
-      setSelectedNotUpdated(new Set(status.notUpdatedFiles.map(f => f.filePath)))
-    } else {
-      setSelectedNotUpdated(new Set())
-    }
-  }
-
-  // 全选已更新
-  const toggleSelectAllUpdated = (checked: boolean) => {
-    if (checked && status) {
-      setSelectedUpdated(new Set(status.updatedFiles.map(f => f.filePath)))
-    } else {
-      setSelectedUpdated(new Set())
+      setSelected(new Set())
     }
   }
 
@@ -336,7 +298,6 @@ export function MetadataPage() {
   // 重置状态
   const resetStatus = async () => {
     if (!workspacePath) return
-
     try {
       const query = new URLSearchParams({ workspacePath })
       await fetch(`${API_BASE}/metadata/reset-status?${query}`, { method: 'POST' })
@@ -348,8 +309,8 @@ export function MetadataPage() {
     }
   }
 
-  // 总选中数量
-  const totalSelected = selectedNotUpdated.size + selectedUpdated.size
+  const isAllSelected = filteredBooks.length > 0 && selected.size === filteredBooks.length
+  const isIndeterminate = selected.size > 0 && selected.size < filteredBooks.length
 
   if (loading) {
     return (
@@ -378,7 +339,7 @@ export function MetadataPage() {
           </Space>
 
           <Space>
-            {updating ? (
+            {isRunning ? (
               <>
                 <Progress
                   type="circle"
@@ -391,7 +352,7 @@ export function MetadataPage() {
                 <Button
                   danger
                   icon={<StopOutlined />}
-                  onClick={cancelUpdate}
+                  onClick={cancelTask}
                 >
                   取消
                 </Button>
@@ -402,9 +363,9 @@ export function MetadataPage() {
                   type="primary"
                   icon={<SyncOutlined />}
                   onClick={() => startUpdate()}
-                  disabled={totalSelected === 0}
+                  disabled={selected.size === 0}
                 >
-                  更新选中 ({totalSelected})
+                  更新选中 ({selected.size})
                 </Button>
                 <Button
                   icon={<SyncOutlined />}
@@ -420,86 +381,43 @@ export function MetadataPage() {
             )}
           </Space>
         </div>
+
+        {/* 筛选栏 */}
+        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Checkbox
+            checked={isAllSelected}
+            indeterminate={isIndeterminate}
+            onChange={(e) => toggleSelectAll(e.target.checked)}
+          >
+            全选
+          </Checkbox>
+          <BookFilter filters={filters} onChange={setFilters} />
+        </div>
       </Card>
 
-      {/* 书籍列表 - 两列分别滚动 */}
-      <div style={{ flex: 1, display: 'flex', gap: 16, minHeight: 0, overflow: 'hidden' }}>
-        {/* 左侧：未更新列表 */}
-        <Card
-          className="card"
-          title={
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <BookOutlined style={{ color: '#faad14' }} />
-              <span>未更新 ({status?.notUpdatedFiles?.length || 0})</span>
-              {status?.notUpdatedFiles && status.notUpdatedFiles.length > 0 && (
-                <Checkbox
-                  checked={selectedNotUpdated.size === status.notUpdatedFiles.length}
-                  indeterminate={selectedNotUpdated.size > 0 && selectedNotUpdated.size < status.notUpdatedFiles.length}
-                  onChange={(e) => toggleSelectAllNotUpdated(e.target.checked)}
-                >
-                  全选
-                </Checkbox>
-              )}
-            </div>
-          }
-          style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-          styles={{ body: { flex: 1, overflow: 'auto', padding: '12px 16px' } }}
-        >
-          {(status?.notUpdatedFiles || []).map((item, i) => (
-            <BookItem
-              key={item.filePath || i}
-              book={item}
-              onClick={() => viewDetail(item)}
-              showCheckbox
-              checked={selectedNotUpdated.has(item.filePath)}
-              onCheck={() => toggleNotUpdatedSelection(item.filePath)}
-            />
-          ))}
-          {(!status?.notUpdatedFiles || status.notUpdatedFiles.length === 0) && (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
-              没有未更新的书籍
-            </div>
-          )}
-        </Card>
-
-        {/* 右侧：已更新列表 */}
-        <Card
-          className="card"
-          title={
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <CheckCircleOutlined style={{ color: '#52c41a' }} />
-              <span>已更新 ({status?.updatedFiles?.length || 0})</span>
-              {status?.updatedFiles && status.updatedFiles.length > 0 && (
-                <Checkbox
-                  checked={selectedUpdated.size === status.updatedFiles.length}
-                  indeterminate={selectedUpdated.size > 0 && selectedUpdated.size < status.updatedFiles.length}
-                  onChange={(e) => toggleSelectAllUpdated(e.target.checked)}
-                >
-                  全选
-                </Checkbox>
-              )}
-            </div>
-          }
-          style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
-          styles={{ body: { flex: 1, overflow: 'auto', padding: '12px 16px' } }}
-        >
-          {(status?.updatedFiles || []).map((item, i) => (
-            <BookItem
-              key={item.filePath || i}
-              book={item}
-              onClick={() => viewDetail(item)}
-              showCheckbox
-              checked={selectedUpdated.has(item.filePath)}
-              onCheck={() => toggleUpdatedSelection(item.filePath)}
-            />
-          ))}
-          {(!status?.updatedFiles || status.updatedFiles.length === 0) && (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
-              没有已更新的书籍
-            </div>
-          )}
-        </Card>
-      </div>
+      {/* 书籍列表 */}
+      <Card
+        className="card"
+        title={<span>全部书籍 ({filteredBooks.length})</span>}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+        styles={{ body: { flex: 1, overflow: 'auto', padding: '12px 16px' } }}
+      >
+        {filteredBooks.map((item, i) => (
+          <BookItem
+            key={item.filePath || i}
+            book={item}
+            onClick={() => viewDetail(item)}
+            showCheckbox
+            checked={selected.has(item.filePath)}
+            onCheck={() => toggleSelection(item.filePath)}
+          />
+        ))}
+        {filteredBooks.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
+            {filters.size > 0 ? '没有符合筛选条件的书籍' : '没有需要更新的书籍'}
+          </div>
+        )}
+      </Card>
 
       {/* 详情抽屉 */}
       <BookDetailDrawer

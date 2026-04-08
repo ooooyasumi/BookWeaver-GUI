@@ -1,11 +1,13 @@
 import { Tooltip } from 'antd'
-import { TagsOutlined, PictureOutlined, CloudUploadOutlined } from '@ant-design/icons'
+import { TagsOutlined, PictureOutlined, CloudUploadOutlined, CloseCircleOutlined } from '@ant-design/icons'
 
 interface BookStatusIconsProps {
   metadataUpdated?: boolean
+  metadataError?: string | null
   coverUpdated?: boolean
   coverError?: string | null
   uploaded?: boolean
+  uploadError?: string | null
 }
 
 const iconStyle = (active: boolean, error?: boolean) => ({
@@ -14,19 +16,40 @@ const iconStyle = (active: boolean, error?: boolean) => ({
   transition: 'color 0.2s',
 })
 
-export function BookStatusIcons({ metadataUpdated, coverUpdated, coverError, uploaded }: BookStatusIconsProps) {
+export function BookStatusIcons({
+  metadataUpdated,
+  metadataError,
+  coverUpdated,
+  coverError,
+  uploaded,
+  uploadError,
+}: BookStatusIconsProps) {
+  const hasMetadataError = !metadataUpdated && !!metadataError
   const hasCoverError = !coverUpdated && !!coverError
+  const hasUploadError = !uploaded && !!uploadError
 
   return (
     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-      <Tooltip title={metadataUpdated ? '元数据已更新' : '元数据未更新'}>
-        <TagsOutlined style={iconStyle(!!metadataUpdated)} />
+      <Tooltip title={hasMetadataError ? `元数据更新失败: ${metadataError}` : metadataUpdated ? '元数据已更新' : '元数据未更新'}>
+        {hasMetadataError ? (
+          <CloseCircleOutlined style={iconStyle(false, true)} />
+        ) : (
+          <TagsOutlined style={iconStyle(!!metadataUpdated)} />
+        )}
       </Tooltip>
       <Tooltip title={hasCoverError ? `封面更新失败: ${coverError}` : coverUpdated ? '封面已更新' : '封面未更新'}>
-        <PictureOutlined style={iconStyle(!!coverUpdated, hasCoverError)} />
+        {hasCoverError ? (
+          <CloseCircleOutlined style={iconStyle(false, true)} />
+        ) : (
+          <PictureOutlined style={iconStyle(!!coverUpdated, hasCoverError)} />
+        )}
       </Tooltip>
-      <Tooltip title={uploaded ? '已上传' : '未上传'}>
-        <CloudUploadOutlined style={iconStyle(!!uploaded)} />
+      <Tooltip title={hasUploadError ? `上传失败: ${uploadError}` : uploaded ? '已上传' : '未上传'}>
+        {hasUploadError ? (
+          <CloseCircleOutlined style={iconStyle(false, true)} />
+        ) : (
+          <CloudUploadOutlined style={iconStyle(!!uploaded, hasUploadError)} />
+        )}
       </Tooltip>
     </span>
   )

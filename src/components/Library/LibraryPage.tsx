@@ -3,7 +3,6 @@ import { Card, Empty, Spin, Tag, Segmented, Collapse, Typography, message, Butto
 import {
   BookOutlined, FolderOutlined, TagsOutlined, CalendarOutlined,
   ReloadOutlined, FileTextOutlined, DeleteOutlined,
-  PictureOutlined, CloudUploadOutlined, CloseCircleOutlined
 } from '@ant-design/icons'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import {
@@ -13,6 +12,7 @@ import {
 } from '../../services/api'
 import { BookDetailDrawer, formatFileSize, BookInfo } from '../Common/BookDetailDrawer'
 import { BookStatusIcons } from '../Common/BookStatusIcons'
+import { BookFilter, FilterKey, matchesFilter } from '../Common/BookFilter'
 
 const { Text } = Typography
 
@@ -22,31 +22,6 @@ const API_BASE = window.location.protocol === 'file:'
   : '/api'
 
 type ViewMode = 'all' | 'folder' | 'subject' | 'year'
-
-// 筛选标签类型
-type FilterKey = 'metadataNotUpdated' | 'coverNotUpdated' | 'coverError' | 'uploaded' | 'notUploaded'
-
-const FILTER_OPTIONS: { key: FilterKey; label: string; icon: React.ReactNode; color: string }[] = [
-  { key: 'metadataNotUpdated', label: '元数据未更新', icon: <TagsOutlined />, color: '#faad14' },
-  { key: 'coverNotUpdated', label: '封面未更新', icon: <PictureOutlined />, color: '#faad14' },
-  { key: 'coverError', label: '封面更新失败', icon: <CloseCircleOutlined />, color: '#ff4d4f' },
-  { key: 'uploaded', label: '已上传', icon: <CloudUploadOutlined />, color: '#52c41a' },
-  { key: 'notUploaded', label: '未上传', icon: <CloudUploadOutlined />, color: '#faad14' },
-]
-
-function matchesFilter(book: EpubMetadata, filters: Set<FilterKey>): boolean {
-  if (filters.size === 0) return true
-  for (const f of filters) {
-    switch (f) {
-      case 'metadataNotUpdated': if (book.metadataUpdated) return false; break
-      case 'coverNotUpdated': if (book.coverUpdated || book.coverError) return false; break
-      case 'coverError': if (!(!book.coverUpdated && book.coverError)) return false; break
-      case 'uploaded': if (!book.uploaded) return false; break
-      case 'notUploaded': if (book.uploaded) return false; break
-    }
-  }
-  return true
-}
 
 // ─── 书籍列表项 ─────────────────────────────────────────────────────────────
 
@@ -96,9 +71,11 @@ function BookItem({
           <div style={{ marginTop: 4 }}>
             <BookStatusIcons
               metadataUpdated={book.metadataUpdated}
+              metadataError={book.metadataError}
               coverUpdated={book.coverUpdated}
               coverError={book.coverError}
               uploaded={book.uploaded}
+              uploadError={book.uploadError}
             />
           </div>
         </div>
@@ -118,39 +95,6 @@ function BookItem({
           {formatFileSize(book.fileSize)}
         </Text>
       </div>
-    </div>
-  )
-}
-
-// ─── 筛选栏 ─────────────────────────────────────────────────────────────────
-
-function FilterBar({
-  filters,
-  onToggle,
-}: {
-  filters: Set<FilterKey>
-  onToggle: (key: FilterKey) => void
-}) {
-  return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {FILTER_OPTIONS.map(opt => {
-        const active = filters.has(opt.key)
-        return (
-          <Tag
-            key={opt.key}
-            onClick={() => onToggle(opt.key)}
-            style={{
-              cursor: 'pointer', margin: 0, userSelect: 'none',
-              borderColor: active ? opt.color : undefined,
-              color: active ? opt.color : undefined,
-              background: active ? `${opt.color}10` : undefined,
-            }}
-            icon={opt.icon}
-          >
-            {opt.label}
-          </Tag>
-        )
-      })}
     </div>
   )
 }
@@ -175,13 +119,6 @@ export function LibraryPage() {
   // 选中（用于删除）
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
-
-  const toggleFilter = (key: FilterKey) => {
-    const next = new Set(filters)
-    if (next.has(key)) next.delete(key)
-    else next.add(key)
-    setFilters(next)
-  }
 
   // 筛选后的书籍列表
   const filteredBooks = useMemo(
@@ -578,7 +515,7 @@ export function LibraryPage() {
             全选
           </Checkbox>
           <div style={{ width: 1, height: 16, background: 'var(--border-color)' }} />
-          <FilterBar filters={filters} onToggle={toggleFilter} />
+          <BookFilter filters={filters} onChange={setFilters} />
         </div>
       </Card>
 

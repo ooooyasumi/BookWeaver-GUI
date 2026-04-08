@@ -102,6 +102,33 @@ export interface Config {
 
 export type PageType = 'search' | 'download' | 'library' | 'metadata' | 'cover' | 'upload'
 
+// ─── 活跃任务类型（供 Metadata/Cover/Upload 共用）───────────────────────────
+
+export type TaskType = 'metadata' | 'cover' | 'upload'
+export type TaskStatus = 'running' | 'paused'
+
+export interface TaskProgress {
+  type: string
+  total?: number
+  processed?: number
+  success?: number
+  failed?: number
+  skipped?: number
+  stage?: string
+  bookTitle?: string
+  latestResult?: any
+  results?: any[]
+  message?: string
+}
+
+export interface ActiveTask {
+  id: string
+  type: TaskType
+  status: TaskStatus
+  progress: TaskProgress
+  abortController: AbortController | null
+}
+
 // ─── Context 类型 ─────────────────────────────────────────────────────────────
 
 interface WorkspaceContextType {
@@ -117,6 +144,9 @@ interface WorkspaceContextType {
 
   // 下载中临时状态（不持久化）
   activeDownload: ActiveDownload | null
+
+  // 活跃任务状态（供 Metadata/Cover/Upload 共用，不持久化）
+  activeTask: ActiveTask | null
 
   openWorkspace: (path: string) => Promise<void>
   closeWorkspace: () => void
@@ -142,6 +172,12 @@ interface WorkspaceContextType {
   // 下载中状态操作（纯内存）
   setActiveDownload: (d: ActiveDownload | null) => void
   updateActiveDownload: (updates: Partial<ActiveDownload>) => void
+
+  // 活跃任务操作（纯内存）
+  setActiveTask: (task: ActiveTask | null) => void
+  updateActiveTask: (updates: Partial<ActiveTask>) => void
+  pauseTask: () => void
+  cancelTask: () => void
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
@@ -159,6 +195,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [searchResults, setSearchResultsState] = useState<BookResult[]>([])
   const [searchResultSelectedKeys, setSearchResultSelectedKeys] = useState<number[]>([])
   const [activeDownload, setActiveDownload] = useState<ActiveDownload | null>(null)
+  const [activeTask, setActiveTaskState] = useState<ActiveTask | null>(null)
 
   // ── 工作区 ──────────────────────────────────────────────────────────────
 
@@ -187,6 +224,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setSearchResultsState([])
     setSearchResultSelectedKeys([])
     setActiveDownload(null)
+    setActiveTaskState(null)
   }
 
   // ── 持久化（仅保存 appState，不含临时下载进度）──────────────────────────
@@ -278,6 +316,37 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setActiveDownload(prev => prev ? { ...prev, ...updates } : null)
   }
 
+  // ── 活跃任务状态 ────────────────────────────────────────────────────────
+
+  const setActiveTask = (task: ActiveTask | null) => {
+    setActiveTaskState(task)
+  }
+
+  const updateActiveTask = (updates: Partial<ActiveTask>) => {
+    setActiveTaskState(prev => prev ? { ...prev, ...updates } : null)
+  }
+
+  const pauseTask = () => {
+    if (!activeTask) return
+    // 后端 metadata/cover/upload 暂无 pause 支持，仅更新前端 UI 状态
+    // cancelTask 会真正停止任务
+    updateActiveTask({ status: 'paused' })
+  }
+
+  const cancelTask = () => {
+    if (!activeTask) return
+    // 立即中止前端 SSE
+    activeTask.abortController?.abort()
+    // 通知后端取消
+    const apiPath = activeTask.type === 'metadata'
+      ? '/api/metadata/cancel'
+      : activeTask.type === 'cover'
+      ? '/api/cover/cancel'
+      : '/api/upload/cancel'
+    fetch(apiPath, { method: 'POST' }).catch(console.error)
+    setActiveTaskState(null)
+  }
+
   return (
     <WorkspaceContext.Provider value={{
       isWorkspaceOpen,
@@ -288,6 +357,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       searchResults,
       searchResultSelectedKeys,
       activeDownload,
+      activeTask,
       openWorkspace,
       closeWorkspace,
       setCurrentPage,
@@ -304,6 +374,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       clearSearchResultSelection,
       setActiveDownload,
       updateActiveDownload,
+      setActiveTask,
+      updateActiveTask,
+      pauseTask,
+      cancelTask,
     }}>
       {children}
     </WorkspaceContext.Provider>

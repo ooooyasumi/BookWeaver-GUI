@@ -309,9 +309,12 @@ export interface EpubMetadata {
   error: string | null
   relativePath?: string
   metadataUpdated?: boolean
+  metadataError?: string | null
   coverUpdated?: boolean
   coverError?: string | null
   uploaded?: boolean
+  uploadError?: string | null
+  uploadedAt?: string | null
 }
 
 export interface EpubDetail {

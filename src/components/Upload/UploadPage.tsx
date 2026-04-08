@@ -3,11 +3,11 @@ import { Card, Button, Space, Checkbox, message, Spin, Progress, Tag, Typography
 import {
   CloudUploadOutlined, StopOutlined, CheckCircleOutlined,
   FileTextOutlined, ExclamationCircleOutlined, CloseCircleOutlined,
-  TagsOutlined, PictureOutlined
 } from '@ant-design/icons'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { BookDetailDrawer, formatFileSize, BookInfo } from '../Common/BookDetailDrawer'
 import { BookStatusIcons } from '../Common/BookStatusIcons'
+import { BookFilter, FilterKey, matchesFilter, BookWithAllStatus } from '../Common/BookFilter'
 
 const { Text } = Typography
 
@@ -31,16 +31,15 @@ interface UploadFileInfo {
   publishYear?: number | null
   subjects?: string[]
   fileSize?: number
-  // 已上传
   uploadedAt?: string
   uploadBaseUrl?: string
-  // 失败
-  uploadError?: string
+  uploadError?: string | null
   failedAt?: string
-  // 跨页面状态
   metadataUpdated?: boolean
+  metadataError?: string | null
   coverUpdated?: boolean
   coverError?: string | null
+  uploaded?: boolean
 }
 
 interface UploadStatus {
@@ -51,74 +50,6 @@ interface UploadStatus {
   canUploadFiles: UploadFileInfo[]
   uploadedFiles: UploadFileInfo[]
   failedFiles: UploadFileInfo[]
-}
-
-interface UploadProgress {
-  type: string
-  total?: number
-  processed?: number
-  success?: number
-  failed?: number
-  skipped?: number
-  stage?: string
-  bookTitle?: string
-  latestResult?: any
-  results?: any[]
-  message?: string
-}
-
-// 筛选
-type FilterKey = 'metadataUpdated' | 'coverUpdated' | 'coverError'
-
-const FILTER_OPTIONS: { key: FilterKey; label: string; icon: React.ReactNode; color: string }[] = [
-  { key: 'metadataUpdated', label: '元数据已更新', icon: <TagsOutlined />, color: '#52c41a' },
-  { key: 'coverUpdated', label: '封面已更新', icon: <PictureOutlined />, color: '#52c41a' },
-  { key: 'coverError', label: '封面更新失败', icon: <CloseCircleOutlined />, color: '#ff4d4f' },
-]
-
-function matchesFilter(book: UploadFileInfo, filters: Set<FilterKey>): boolean {
-  if (filters.size === 0) return true
-  for (const f of filters) {
-    switch (f) {
-      case 'metadataUpdated': if (!book.metadataUpdated) return false; break
-      case 'coverUpdated': if (!book.coverUpdated) return false; break
-      case 'coverError': if (!(!book.coverUpdated && book.coverError)) return false; break
-    }
-  }
-  return true
-}
-
-// ─── 筛选栏 ─────────────────────────────────────────────────────────────────
-
-function FilterBar({
-  filters,
-  onToggle,
-}: {
-  filters: Set<FilterKey>
-  onToggle: (key: FilterKey) => void
-}) {
-  return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {FILTER_OPTIONS.map(opt => {
-        const active = filters.has(opt.key)
-        return (
-          <Tag
-            key={opt.key}
-            onClick={() => onToggle(opt.key)}
-            style={{
-              cursor: 'pointer', margin: 0, userSelect: 'none',
-              borderColor: active ? opt.color : undefined,
-              color: active ? opt.color : undefined,
-              background: active ? `${opt.color}10` : undefined,
-            }}
-            icon={opt.icon}
-          >
-            {opt.label}
-          </Tag>
-        )
-      })}
-    </div>
-  )
 }
 
 // ─── 书籍列表项 ─────────────────────────────────────────────────────────────
@@ -173,9 +104,11 @@ function BookItem({
           <div style={{ marginTop: 4 }}>
             <BookStatusIcons
               metadataUpdated={book.metadataUpdated}
+              metadataError={book.metadataError}
               coverUpdated={book.coverUpdated}
               coverError={book.coverError}
               uploaded={isUploaded || !!book.uploadedAt}
+              uploadError={book.uploadError}
             />
           </div>
         </div>
@@ -205,12 +138,10 @@ function BookItem({
 // ─── UploadPage ─────────────────────────────────────────────────────────────
 
 export function UploadPage() {
-  const { workspacePath } = useWorkspace()
+  const { workspacePath, activeTask, setActiveTask, updateActiveTask, cancelTask } = useWorkspace()
 
   const [status, setStatus] = useState<UploadStatus | null>(null)
   const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState<UploadProgress | null>(null)
 
   // 环境选择
   const [baseUrl, setBaseUrl] = useState(ENVIRONMENTS[0].value)
@@ -218,21 +149,12 @@ export function UploadPage() {
   // 选中的文件（统一一个 Set）
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
-  // AbortController
-  const [abortController, setAbortController] = useState<AbortController | null>(null)
-
   // 详情抽屉
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
   const [selectedBook, setSelectedBook] = useState<BookInfo | null>(null)
 
   // 筛选
   const [filters, setFilters] = useState<Set<FilterKey>>(new Set())
-  const toggleFilter = (key: FilterKey) => {
-    const next = new Set(filters)
-    if (next.has(key)) next.delete(key)
-    else next.add(key)
-    setFilters(next)
-  }
 
   // 合并所有书籍到一个列表，标记状态
   const allBooks = useMemo(() => {
@@ -255,9 +177,13 @@ export function UploadPage() {
 
   // 筛选后的列表
   const filteredBooks = useMemo(
-    () => allBooks.filter(b => matchesFilter(b, filters)),
+    () => allBooks.filter(b => matchesFilter(b as BookWithAllStatus, filters)),
     [allBooks, filters]
   )
+
+  // 是否正在运行上传任务
+  const isRunning = activeTask?.type === 'upload' && activeTask.status === 'running'
+  const progress = activeTask?.progress
 
   // 加载状态
   const loadStatus = async () => {
@@ -288,7 +214,6 @@ export function UploadPage() {
 
     let filesToUpload: UploadFileInfo[] = files || []
     if (!files || files.length === 0) {
-      // 从选中列表查找
       filesToUpload = Array.from(selected).map(path => {
         const found = allBooks.find(f => f.filePath === path)
         return { filePath: path, title: found?.title || null, author: found?.author || null }
@@ -300,12 +225,15 @@ export function UploadPage() {
       return
     }
 
-    setUploading(true)
-    setProgress({ type: 'start', total: filesToUpload.length, success: 0, failed: 0, skipped: 0 })
-    setSelected(new Set())
-
     const controller = new AbortController()
-    setAbortController(controller)
+    setActiveTask({
+      id: Date.now().toString(),
+      type: 'upload',
+      status: 'running',
+      progress: { type: 'start', total: filesToUpload.length, success: 0, failed: 0, skipped: 0 },
+      abortController: controller,
+    })
+    setSelected(new Set())
 
     try {
       const response = await fetch(`${API_BASE}/upload/start`, {
@@ -335,7 +263,7 @@ export function UploadPage() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6))
-              setProgress(prev => ({ ...prev, ...data }))
+              updateActiveTask({ progress: { ...activeTask?.progress, ...data } })
 
               if (data.type === 'done') {
                 const msgs: string[] = []
@@ -354,10 +282,8 @@ export function UploadPage() {
                   }
                 }
                 setTimeout(() => {
+                  setActiveTask(null)
                   loadStatus()
-                  setUploading(false)
-                  setProgress(null)
-                  setAbortController(null)
                 }, 500)
               } else if (data.type === 'error') {
                 message.error(`上传出错: ${data.message}`)
@@ -375,9 +301,7 @@ export function UploadPage() {
         console.error('Upload error:', error)
         message.error('上传失败')
       }
-      setUploading(false)
-      setProgress(null)
-      setAbortController(null)
+      setActiveTask(null)
       loadStatus()
     }
   }
@@ -390,19 +314,6 @@ export function UploadPage() {
       return
     }
     startUpload(pending)
-  }
-
-  // 取消上传
-  const cancelUpload = async () => {
-    try {
-      await fetch(`${API_BASE}/upload/cancel`, { method: 'POST' })
-      if (abortController) {
-        abortController.abort()
-        setAbortController(null)
-      }
-    } catch (error) {
-      console.error('Cancel error:', error)
-    }
   }
 
   // 选择切换
@@ -485,10 +396,10 @@ export function UploadPage() {
               onChange={setBaseUrl}
               options={ENVIRONMENTS}
               style={{ width: 180 }}
-              disabled={uploading}
+              disabled={isRunning}
             />
 
-            {uploading ? (
+            {isRunning ? (
               <>
                 <Progress
                   type="circle"
@@ -508,7 +419,7 @@ export function UploadPage() {
                 <Button
                   danger
                   icon={<StopOutlined />}
-                  onClick={cancelUpload}
+                  onClick={cancelTask}
                 >
                   取消
                 </Button>
@@ -537,7 +448,7 @@ export function UploadPage() {
 
         {/* 筛选栏 */}
         <div style={{ marginTop: 12 }}>
-          <FilterBar filters={filters} onToggle={toggleFilter} />
+          <BookFilter filters={filters} onChange={setFilters} />
         </div>
       </Card>
 

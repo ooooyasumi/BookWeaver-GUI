@@ -320,7 +320,7 @@ def get_cover_status(workspace_path: str) -> Dict[str, Any]:
     index = get_or_build_index(workspace_path)
     files = index.get("files", {})
 
-    # 加载上传状态
+    # 加载上传状态（仅用于补充缺失的索引字段）
     try:
         from .book_uploader import load_upload_progress
         upload_progress = load_upload_progress(workspace_path)
@@ -333,7 +333,8 @@ def get_cover_status(workspace_path: str) -> Dict[str, Any]:
 
     for fp, meta in files.items():
         entry = {k: v for k, v in meta.items() if not k.startswith("_")}
-        entry["uploaded"] = fp in uploaded_map
+        # 优先使用索引中的上传状态，否则用 progress 文件
+        entry["uploaded"] = meta.get("uploaded", fp in uploaded_map)
         if meta.get("coverUpdated") or meta.get("coverError"):
             updated.append(entry)
         else:

@@ -358,6 +358,10 @@ def build_index(workspace_path: str) -> Dict[str, Any]:
             "coverUpdated": existing_meta.get("coverUpdated", False),
             "coverUpdatedAt": existing_meta.get("coverUpdatedAt"),
             "coverError": existing_meta.get("coverError"),
+            # 上传管理状态
+            "uploaded": existing_meta.get("uploaded", False),
+            "uploadedAt": existing_meta.get("uploadedAt"),
+            "uploadError": existing_meta.get("uploadError"),
         }
 
     # 写入索引文件（使用集中式 save，自动转相对路径）
@@ -381,6 +385,25 @@ def load_index(workspace_path: str) -> Optional[Dict[str, Any]]:
         return index
     except (json.JSONDecodeError, KeyError):
         return None
+
+
+def update_file_upload_status(
+    workspace_path: str,
+    file_path: str,
+    uploaded: bool,
+    error: Optional[str] = None
+):
+    """更新单个文件的上传状态到索引."""
+    from datetime import datetime
+    index = load_index(workspace_path)
+    if not index:
+        return
+    if file_path not in index.get("files", {}):
+        return
+    index["files"][file_path]["uploaded"] = uploaded
+    index["files"][file_path]["uploadedAt"] = datetime.now().isoformat() if uploaded else None
+    index["files"][file_path]["uploadError"] = error
+    save_index(workspace_path, index)
 
 
 def get_or_build_index(workspace_path: str) -> Dict[str, Any]:
@@ -446,6 +469,10 @@ def get_or_build_index(workspace_path: str) -> Dict[str, Any]:
             "coverUpdated": existing_meta.get("coverUpdated", False),
             "coverUpdatedAt": existing_meta.get("coverUpdatedAt"),
             "coverError": existing_meta.get("coverError"),
+            # 保留已有的上传管理状态
+            "uploaded": existing_meta.get("uploaded", False),
+            "uploadedAt": existing_meta.get("uploadedAt"),
+            "uploadError": existing_meta.get("uploadError"),
         }
 
     existing["files"] = indexed

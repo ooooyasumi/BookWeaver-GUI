@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Card, Button, Space, Checkbox, message, Spin, Progress, Slider, Typography, Modal } from 'antd'
 import { PictureOutlined, SyncOutlined, StopOutlined, CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, DeleteOutlined } from '@ant-design/icons'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { BookStatusIcons } from '../Common/BookStatusIcons'
+import { BookFilter, FilterKey, matchesFilter, BookWithAllStatus } from '../Common/BookFilter'
 
 const { Text } = Typography
 
@@ -17,9 +18,11 @@ interface CoverFileInfo {
   coverBase64?: string
   coverMediaType?: string
   coverUpdated?: boolean
-  coverError?: string
+  coverError?: string | null
   metadataUpdated?: boolean
+  metadataError?: string | null
   uploaded?: boolean
+  uploadError?: string | null
 }
 
 interface CoverStatus {
@@ -28,21 +31,6 @@ interface CoverStatus {
   updated: number
   notUpdatedFiles: CoverFileInfo[]
   updatedFiles: CoverFileInfo[]
-}
-
-interface UpdateProgress {
-  type: string
-  total?: number
-  processed?: number
-  success?: number
-  failed?: number
-  latestResult?: {
-    filePath: string
-    success: boolean
-    error?: string
-    coverBase64?: string
-    coverMediaType?: string
-  }
 }
 
 // ─── 封面卡片 ────────────────────────────────────────────────────────────────
@@ -143,9 +131,11 @@ function CoverCard({
         <div style={{ marginTop: 4 }}>
           <BookStatusIcons
             metadataUpdated={book.metadataUpdated}
+            metadataError={book.metadataError}
             coverUpdated={book.coverUpdated}
             coverError={book.coverError}
             uploaded={book.uploaded}
+            uploadError={book.uploadError}
           />
         </div>
       </div>
@@ -156,21 +146,34 @@ function CoverCard({
 // ─── CoverPage ───────────────────────────────────────────────────────────────
 
 export function CoverPage() {
-  const { workspacePath } = useWorkspace()
+  const { workspacePath, activeTask, setActiveTask, updateActiveTask, cancelTask } = useWorkspace()
 
   const [status, setStatus] = useState<CoverStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [statusError, setStatusError] = useState<string | null>(null)
   const [thumbLoading, setThumbLoading] = useState(false)
-  const [updating, setUpdating] = useState(false)
-  const [progress, setProgress] = useState<UpdateProgress | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [abortController, setAbortController] = useState<AbortController | null>(null)
   const [columns, setColumns] = useState(5)
   const [deleting, setDeleting] = useState(false)
 
+  // 筛选
+  const [filters, setFilters] = useState<Set<FilterKey>>(new Set())
+
   // 合并全部文件（未更新在前）
-  const allBooks = status ? [...status.notUpdatedFiles, ...status.updatedFiles] : []
+  const allBooks = useMemo(() => {
+    if (!status) return []
+    return [...status.notUpdatedFiles, ...status.updatedFiles]
+  }, [status])
+
+  // 筛选后的书籍
+  const filteredBooks = useMemo(
+    () => allBooks.filter(b => matchesFilter(b as BookWithAllStatus, filters)),
+    [allBooks, filters]
+  )
+
+  // 是否正在运行封面任务
+  const isRunning = activeTask?.type === 'cover' && activeTask.status === 'running'
+  const progress = activeTask?.progress
 
   // ── 加载缩略图（独立请求）──────────────────────────────────────────────
 
@@ -273,14 +276,14 @@ export function CoverPage() {
   // 全选：选中所有书籍
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelected(new Set(allBooks.map(f => f.filePath)))
+      setSelected(new Set(filteredBooks.map(f => f.filePath)))
     } else {
       setSelected(new Set())
     }
   }
 
-  const isAllSelected = allBooks.length > 0 && selected.size === allBooks.length
-  const isIndeterminate = selected.size > 0 && selected.size < allBooks.length
+  const isAllSelected = filteredBooks.length > 0 && selected.size === filteredBooks.length
+  const isIndeterminate = selected.size > 0 && selected.size < filteredBooks.length
 
   // ── 开始更新 ────────────────────────────────────────────────────────────
 
@@ -289,19 +292,22 @@ export function CoverPage() {
 
     let filesToUpdate = files || []
     if (!files || files.length === 0) {
-      filesToUpdate = allBooks.filter(b => selected.has(b.filePath))
+      filesToUpdate = filteredBooks.filter(b => selected.has(b.filePath))
     }
     if (filesToUpdate.length === 0) {
       message.warning('请选择要更新封面的书籍')
       return
     }
 
-    setUpdating(true)
-    setProgress({ type: 'start', total: filesToUpdate.length, success: 0, failed: 0 })
-    setSelected(new Set())
-
     const controller = new AbortController()
-    setAbortController(controller)
+    setActiveTask({
+      id: Date.now().toString(),
+      type: 'cover',
+      status: 'running',
+      progress: { type: 'start', total: filesToUpdate.length, success: 0, failed: 0 },
+      abortController: controller,
+    })
+    setSelected(new Set())
 
     try {
       const response = await fetch(`${API_BASE}/cover/update`, {
@@ -330,7 +336,7 @@ export function CoverPage() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6))
-              setProgress(prev => ({ ...prev, ...data }))
+              updateActiveTask({ progress: { ...activeTask?.progress, ...data } })
 
               // 实时更新封面：当某本书更新成功，更新 status 中对应书的封面
               if (data.latestResult?.success && data.latestResult.coverBase64) {
@@ -364,10 +370,8 @@ export function CoverPage() {
                   message.success(msg, 3)
                 }
                 setTimeout(() => {
+                  setActiveTask(null)
                   loadStatus()
-                  setUpdating(false)
-                  setProgress(null)
-                  setAbortController(null)
                 }, 500)
               }
             } catch { /* ignore parse error */ }
@@ -382,9 +386,7 @@ export function CoverPage() {
         console.error('[Cover] 更新失败:', errMsg)
         message.error(`更新封面失败: ${errMsg}`, 6)
       }
-      setUpdating(false)
-      setProgress(null)
-      setAbortController(null)
+      setActiveTask(null)
       loadStatus()
     }
   }
@@ -395,19 +397,6 @@ export function CoverPage() {
       return
     }
     startUpdate(status.notUpdatedFiles)
-  }
-
-  const cancelUpdate = async () => {
-    try {
-      await fetch(`${API_BASE}/cover/cancel`, { method: 'POST' })
-      if (abortController) {
-        abortController.abort()
-        setAbortController(null)
-      }
-    } catch (error: any) {
-      console.error('[Cover] 取消失败:', error)
-      message.error(`取消请求失败: ${error?.message || '网络错误'}`)
-    }
   }
 
   const resetStatus = async () => {
@@ -524,7 +513,7 @@ export function CoverPage() {
           </Space>
 
           <Space>
-            {updating ? (
+            {isRunning ? (
               <>
                 <Progress
                   type="circle"
@@ -534,7 +523,7 @@ export function CoverPage() {
                 <span>
                   {(progress?.success || 0) + (progress?.failed || 0)}/{progress?.total || 0}
                 </span>
-                <Button danger icon={<StopOutlined />} onClick={cancelUpdate}>
+                <Button danger icon={<StopOutlined />} onClick={cancelTask}>
                   停止
                 </Button>
               </>
@@ -578,6 +567,9 @@ export function CoverPage() {
               </>
             )}
           </Space>
+
+          {/* 筛选栏 */}
+          <BookFilter filters={filters} onChange={setFilters} />
         </div>
       </Card>
 
@@ -594,10 +586,10 @@ export function CoverPage() {
 
       {/* 书籍网格 */}
       <div style={{ flex: 1, overflow: 'auto', paddingBottom: 20 }}>
-        {allBooks.length === 0 ? (
+        {filteredBooks.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 80, color: 'var(--text-tertiary)' }}>
             <PictureOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-            <div>没有书籍</div>
+            <div>{filters.size > 0 ? '没有符合筛选条件的书籍' : '没有书籍'}</div>
           </div>
         ) : (
           <div style={{
@@ -605,7 +597,7 @@ export function CoverPage() {
             flexWrap: 'wrap',
             gap,
           }}>
-            {allBooks.map((book) => (
+            {filteredBooks.map((book) => (
               <CoverCard
                 key={book.filePath}
                 book={book}

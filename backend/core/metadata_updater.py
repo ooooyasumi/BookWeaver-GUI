@@ -137,7 +137,9 @@ def get_metadata_status(workspace_path: str) -> dict:
             "metadataError": file_info.get("metadataError"),
             "coverUpdated": file_info.get("coverUpdated", False),
             "coverError": file_info.get("coverError"),
-            "uploaded": file_path in uploaded_map,
+            "uploaded": file_info.get("uploaded", file_path in uploaded_map),
+            "uploadError": file_info.get("uploadError"),
+            "uploadedAt": file_info.get("uploadedAt"),
         }
 
         if file_info.get("metadataUpdated", False):

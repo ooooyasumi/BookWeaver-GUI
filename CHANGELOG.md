@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-08
+
+### Added
+
+- **书籍三项属性九态系统**
+  - 每本书的元数据、封面、上传三个属性各支持三种状态：未完成/已完成/失败
+  - 元数据失败写入 `metadataError`、封面失败写入 `coverError`、上传失败写入 `uploadError`
+  - 上传失败/成功时同步更新 `library_index.json` 索引
+
+- **统一筛选组件（BookFilter）**
+  - 新建 `src/components/Common/BookFilter.tsx`，四个页面统一使用
+  - 下拉多选分组展示9种状态筛选：元数据(3项)/封面(3项)/上传(3项)
+  - 颜色标识：未完成（黄）/ 已完成（绿）/ 失败（红）
+
+- **全局任务状态与跨页持久化**
+  - `WorkspaceContext` 新增 `activeTask` 状态，`MetadataPage/CoverPage/UploadPage` 共用
+  - 页面切换时任务保持运行，暂停/取消按钮立即生效
+
+- **上传健壮性增强**
+  - 单本书上传失败不影响后续书籍，失败原因持久化到索引
+  - 前端 UploadPage 失败标签鼠标悬停显示详细错误
+
+### Changed
+
+- **元数据管理页面（MetadataPage）重构**
+  - 去除左右双列布局，改为单列表 + 统一 BookFilter 筛选
+  - 使用全局任务状态，不再有独立 AbortController
+
+- **封面管理页面（CoverPage）重构**
+  - 加 BookFilter 统一筛选（保持封面卡片网格布局）
+  - 使用全局任务状态
+
+- **上传管理页面（UploadPage）重构**
+  - 移除原有 Tag 筛选，改用 BookFilter 统一筛选
+  - 使用全局任务状态，失败详情显示
+
 ## [0.5.0] - 2026-04-07
 
 ### Added

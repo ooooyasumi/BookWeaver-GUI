@@ -359,6 +359,9 @@ def mark_uploaded(workspace_path: str, file_path: str, base_url: str):
     # 从 failed 中移除（如果是重新上传成功的）
     progress["failed"].pop(file_path, None)
     save_upload_progress(workspace_path, progress)
+    # 同步更新索引
+    from .epub_meta import update_file_upload_status
+    update_file_upload_status(workspace_path, file_path, True, None)
 
 
 def mark_failed(workspace_path: str, file_path: str, error: str):
@@ -369,6 +372,9 @@ def mark_failed(workspace_path: str, file_path: str, error: str):
         "failedAt": datetime.now().isoformat(),
     }
     save_upload_progress(workspace_path, progress)
+    # 同步更新索引
+    from .epub_meta import update_file_upload_status
+    update_file_upload_status(workspace_path, file_path, False, error)
 
 
 def mark_skipped(workspace_path: str, file_path: str, reason: str):
@@ -379,6 +385,9 @@ def mark_skipped(workspace_path: str, file_path: str, reason: str):
         "skippedAt": datetime.now().isoformat(),
     }
     save_upload_progress(workspace_path, progress)
+    # 同步更新索引（跳过也视为未上传，清除上传状态）
+    from .epub_meta import update_file_upload_status
+    update_file_upload_status(workspace_path, file_path, False, None)
 
 
 # ==================== 上传状态查询 ====================
@@ -415,17 +424,24 @@ def get_upload_status(workspace_path: str) -> Dict[str, Any]:
             "metadataUpdated": file_info.get("metadataUpdated", False),
             "coverUpdated": file_info.get("coverUpdated", False),
             "coverError": file_info.get("coverError"),
+            "uploaded": file_info.get("uploaded", False),
+            "uploadError": file_info.get("uploadError"),
+            "uploadedAt": file_info.get("uploadedAt"),
         }
 
         if file_path in uploaded_map:
+            file_data["uploaded"] = True
             file_data["uploadedAt"] = uploaded_map[file_path].get("uploadedAt")
             file_data["uploadBaseUrl"] = uploaded_map[file_path].get("baseUrl")
+            file_data["uploadError"] = None
             uploaded_files.append(file_data)
         elif file_path in failed_map:
+            file_data["uploaded"] = False
             file_data["uploadError"] = failed_map[file_path].get("error")
             file_data["failedAt"] = failed_map[file_path].get("failedAt")
             failed_files.append(file_data)
         else:
+            file_data["uploaded"] = False
             can_upload_files.append(file_data)
 
     return {
