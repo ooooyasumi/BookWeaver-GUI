@@ -62,6 +62,17 @@ IMPORTANT: You must respond in valid JSON format only. No other text before or a
 Book Title: {title}
 Author: {author}
 
+Examples:
+
+Input: Title: "Pride and Prejudice", Author: "Jane Austen"
+Output: {{"success": true, "error": null, "metadata": {{"description": "Pride and Prejudice, a satirical novel first published in 1813, follows the turbulent relationship between Elizabeth Bennet, a witty and intelligent young woman, and the proud Fitzwilliam Darcy. Set in early 19th-century England, the story explores themes of love, reputation, and social class. Through a series of misunderstandings and personal growth, the characters learn that first impressions can be deceiving and that true happiness requires overcoming prejudice and personal pride.", "categories": [16, 32], "publishYear": 1813}}}
+
+Input: Title: "The Republic", Author: "Plato"
+Output: {{"success": true, "error": null, "metadata": {{"description": "The Republic is a Socratic dialogue written by Plato around 375 BC. It concerns justice, the order and character of the just city-state, and the just man. Plato uses the conversation with Socrates to explore the nature of reality, the theory of Forms, the epistemology of knowledge, the philosophy of education, and the ideal governance of society.", "categories": [36, 31], "publishYear": -375}}}
+
+Input: Title: "Unknown Book XYZ", Author: "Nonexistent Author"
+Output: {{"success": false, "error": "Cannot find reliable information about this book", "metadata": null}}
+
 Respond with this exact JSON structure:
 {{
   "success": true or false,
@@ -69,7 +80,7 @@ Respond with this exact JSON structure:
   "metadata": {{
     "description": "A 150-300 word English description of the book",
     "categories": [1, 2],
-    "publishYear": 1813
+    "publishYear": 1813 or negative year for BC
   }}
 }}
 
@@ -77,9 +88,10 @@ Rules:
 1. description MUST be 150-300 words in English
 2. categories MUST be 1-3 NUMBERS from this list (return the NUMBER, not the text):
 {categories}
-3. publishYear MUST be the ORIGINAL/FIRST publication year (4-digit integer), not reprint dates
+3. publishYear MUST be the ORIGINAL/FIRST publication year (4-digit integer or negative for BC), not reprint dates
 4. If you cannot find reliable information about this book, set success to false and provide an error reason
-5. Do not make up information - only provide what you can verify"""
+5. Do not make up information - only provide what you can verify
+6. Output ONLY the JSON, no markdown code blocks, no explanations"""
 
 BATCH_PROMPT_TEMPLATE = """You are a book metadata expert. Given multiple book titles and authors, provide structured metadata for each.
 
@@ -87,6 +99,11 @@ IMPORTANT: You must respond in valid JSON array format only. No other text befor
 
 Books to process:
 {books}
+
+Examples:
+
+Books: [{"index": 0, "title": "Pride and Prejudice", "author": "Jane Austen"}, {"index": 1, "title": "The Republic", "author": "Plato"}]
+Output: [{{"index": 0, "success": true, "error": null, "metadata": {{"description": "Pride and Prejudice, a satirical novel first published in 1813, follows the turbulent relationship between Elizabeth Bennet, a witty and intelligent young woman, and the proud Fitzwilliam Darcy. Set in early 19th-century England, the story explores themes of love, reputation, and social class. Through a series of misunderstandings and personal growth, the characters learn that first impressions can be deceiving and that true happiness requires overcoming prejudice and personal pride.", "categories": [16, 32], "publishYear": 1813}}}, {{"index": 1, "success": true, "error": null, "metadata": {{"description": "The Republic is a Socratic dialogue written by Plato around 375 BC. It concerns justice, the order and character of the just city-state, and the just man. Through a conversation with Socrates, the dialogue explores the nature of reality, the theory of Forms, the epistemology of knowledge, the philosophy of education, and the ideal governance of society.", "categories": [36, 31], "publishYear": -375}}}]
 
 Respond with a JSON array where each item has:
 {{
@@ -96,7 +113,7 @@ Respond with a JSON array where each item has:
   "metadata": {{
     "description": "150-300 word English description",
     "categories": [1, 2],
-    "publishYear": 1813
+    "publishYear": 1813 or negative year for BC
   }}
 }}
 
@@ -104,9 +121,10 @@ Rules:
 1. description MUST be 150-300 words in English
 2. categories MUST be 1-3 NUMBERS from this list (return the NUMBER, not the text):
 {categories}
-3. publishYear MUST be the ORIGINAL/FIRST publication year (4-digit integer), not reprint dates
+3. publishYear MUST be the ORIGINAL/FIRST publication year (4-digit integer or negative for BC), not reprint dates
 4. If you cannot find reliable information, set success to false
-5. Return results in the same order as input"""
+5. Return results in the same order as input (match by index field)
+6. Output ONLY the JSON array, no markdown code blocks, no explanations"""
 
 
 def convert_category_ids_to_names(category_ids: list) -> list[str]:
@@ -183,22 +201,52 @@ def validate_metadata(metadata: dict) -> tuple[bool, Optional[str]]:
     return True, None
 
 
+def _extract_json(text: str) -> str:
+    """从文本中提取 JSON 字符串，支持多种格式."""
+    text = text.strip()
+
+    # 移除 markdown 代码块
+    if text.startswith("```json"):
+        text = text[7:]
+    elif text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+
+    # 如果直接是 JSON，返回
+    try:
+        json.loads(text)
+        return text
+    except json.JSONDecodeError:
+        pass
+
+    # 尝试在文本中找 JSON 对象或数组
+    import re
+    # 找 JSON 对象
+    m = re.search(r"\{[\s\S]*\}", text)
+    if m:
+        try:
+            json.loads(m.group())
+            return m.group()
+        except json.JSONDecodeError:
+            pass
+    # 找 JSON 数组
+    m = re.search(r"\[[\s\S]*\]", text)
+    if m:
+        try:
+            json.loads(m.group())
+            return m.group()
+        except json.JSONDecodeError:
+            pass
+
+    return text
+
+
 def parse_single_response(response_text: str) -> dict:
     """解析单本书的 LLM 响应"""
     try:
-        # 尝试提取 JSON
-        text = response_text.strip()
-
-        # 移除可能的 markdown 代码块标记
-        if text.startswith("```json"):
-            text = text[7:]
-        if text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-
-        text = text.strip()
-
+        text = _extract_json(response_text)
         data = json.loads(text)
     except json.JSONDecodeError as e:
         return {
@@ -246,18 +294,7 @@ def parse_single_response(response_text: str) -> dict:
 def parse_batch_response(response_text: str, expected_count: int) -> list[dict]:
     """解析批量处理的 LLM 响应"""
     try:
-        text = response_text.strip()
-
-        # 移除可能的 markdown 代码块标记
-        if text.startswith("```json"):
-            text = text[7:]
-        if text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
-
-        text = text.strip()
-
+        text = _extract_json(response_text)
         data = json.loads(text)
     except json.JSONDecodeError as e:
         # 返回所有失败

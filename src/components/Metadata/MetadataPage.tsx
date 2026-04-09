@@ -199,7 +199,7 @@ export function MetadataPage() {
     const config = await window.electronAPI.getConfig()
 
     const controller = new AbortController()
-    setActiveTask({
+    await setActiveTask({
       id: Date.now().toString(),
       type: 'metadata',
       status: 'running',
@@ -236,7 +236,7 @@ export function MetadataPage() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6))
-              updateActiveTask({ progress: { ...activeTask?.progress, ...data } })
+              updateActiveTask(prev => ({ progress: { ...(prev?.progress || {}), ...data } }))
 
               if (data.type === 'done') {
                 message.success(`更新完成: 成功 ${data.success || 0}, 失败 ${data.failed || 0}`)

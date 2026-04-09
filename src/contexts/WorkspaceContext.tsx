@@ -322,8 +322,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setActiveTaskState(task)
   }
 
-  const updateActiveTask = (updates: Partial<ActiveTask>) => {
-    setActiveTaskState(prev => prev ? { ...prev, ...updates } : null)
+  const updateActiveTask = (updates: Partial<ActiveTask> | ((prev: ActiveTask | null) => Partial<ActiveTask>)) => {
+    setActiveTaskState(prev => {
+      if (!prev) return null
+      const u = typeof updates === 'function' ? updates(prev) : updates
+      return { ...prev, ...u }
+    })
   }
 
   const pauseTask = () => {

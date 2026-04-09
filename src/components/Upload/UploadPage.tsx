@@ -226,7 +226,7 @@ export function UploadPage() {
     }
 
     const controller = new AbortController()
-    setActiveTask({
+    await setActiveTask({
       id: Date.now().toString(),
       type: 'upload',
       status: 'running',
@@ -263,7 +263,7 @@ export function UploadPage() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6))
-              updateActiveTask({ progress: { ...activeTask?.progress, ...data } })
+              updateActiveTask(prev => ({ progress: { ...(prev?.progress || {}), ...data } }))
 
               if (data.type === 'done') {
                 const msgs: string[] = []

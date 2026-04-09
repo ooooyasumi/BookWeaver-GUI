@@ -300,7 +300,7 @@ export function CoverPage() {
     }
 
     const controller = new AbortController()
-    setActiveTask({
+    await setActiveTask({
       id: Date.now().toString(),
       type: 'cover',
       status: 'running',
@@ -336,7 +336,7 @@ export function CoverPage() {
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6))
-              updateActiveTask({ progress: { ...activeTask?.progress, ...data } })
+              updateActiveTask(prev => ({ progress: { ...(prev?.progress || {}), ...data } }))
 
               // 实时更新封面：当某本书更新成功，更新 status 中对应书的封面
               if (data.latestResult?.success && data.latestResult.coverBase64) {
