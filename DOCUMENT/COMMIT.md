@@ -111,9 +111,12 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 
 | 文件 | 位置 |
 |------|------|
+| `package.json` | `"version": "x.x.x"`（决定 CI/CD 打包输出文件名） |
 | `src/components/Layout/Sidebar.tsx` | 侧边栏左下角版本号文字（格式：`v0.x.x`） |
 | `src/components/Layout/WelcomePage.tsx` | 欢迎页标题版本显示（如有） |
 | `src/components/Settings/VersionHistory.tsx` | 在 VERSION_HISTORY 数组最上面插入新版本，currentVersion 改为新版本号 |
+
+> 注意：`package.json` 的 version 字段决定了 CI/CD 打包输出的文件名（`${productName}-${version}.${ext}`），务必与 git tag 版本一致。
 
 ### 4. 更新 DOCUMENT.md（如有架构更新）
 - 阅读 DOCUMENT.md 检查是否有需要更新的内容
