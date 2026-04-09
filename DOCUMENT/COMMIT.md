@@ -60,7 +60,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 | 操作 | 是否需要确认 | 备注 |
 |------|------------|------|
 | `git commit` | **不需要** | 功能完成/修复后直接提交 |
-| `git push` | **需要确认** | 除非用户明确要求推送到远程，否则不推送 |
+| `git push` | **不需要** | 正常开发中可按需推送 |
 | `git tag` | **需要确认** | 只有用户说"推版本"时才打标签 |
 | 新建分支 | **需要确认** | 除非用户明确要求，否则不新建分支 |
 
@@ -79,42 +79,21 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 - **不要**在 commit 消息中列出具体改动的文件列表
 - **不要**在 commit 消息中写马后炮式描述（如"修复了 XXX bug"）
 - **不要**在 commit 前询问用户，直接执行
-- **不要**在 commit 后自动 push，除非用户明确要求
+- **不要**在 commit 后自动打 tag，除非用户明确说"推版本"
 
 ---
 
 ## 版本发布规则（仅当用户说"推版本"时执行）
 
-### 发布流程
+用户说"推版本"后，按以下顺序执行：
 
-| 序号 | 操作 | 说明 |
-|------|------|------|
-| 1 | 更新版本号 | 修改所有版本显示位置（见下表） |
-| 2 | 更新 CHANGELOG.md | 记录本次版本的更新内容 |
-| 3 | 更新 README.md | 如有需要 |
-| 4 | 更新 DOCUMENT.md | 如有需要，包括顶部"当前版本"字段 |
-| 5 | git commit | 提交所有更改 |
-| 6 | git push | 推送到 main 分支 |
-| 7 | 创建并推送 git tag | 如 `v0.6.0`，触发 CI/CD |
-| 8 | CI/CD 自动构建 | GitHub Actions 自动打包发布 |
+### 1. 更新 README.md
+- 更新当前版本号
+- 更新当前版本的更新内容
 
-### 版本显示位置（全部需同步更新）
-
-| 文件 | 位置 |
-|------|------|
-| `package.json` | `"version": "x.x.x"` |
-| `src/components/Layout/Sidebar.tsx` | 侧边栏左下角版本号文字 |
-| `src/components/Layout/WelcomePage.tsx` | 欢迎页标题（如有版本显示） |
-| `DOCUMENT/DOCUMENT.md` | 顶部"当前版本"字段 |
-
-### 版本号规则
-
-- **主版本号 (x.0.0)**：重大架构变化、不兼容更新
-- **次版本号 (0.x.0)**：新功能、较大改进
-- **修订号 (0.0.x)**：Bug修复、小改进
-
-### CHANGELOG.md 格式
-
+### 2. 更新 CHANGELOG.md
+- 在最上面新增本次版本号的更新内容
+- 使用标准格式：
 ```markdown
 ## [0.x.x] - YYYY-MM-DD
 
@@ -128,6 +107,36 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
 - 变更描述
 ```
 
+### 3. 更改软件内的版本号显示
+
+| 文件 | 位置 |
+|------|------|
+| `src/components/Layout/Sidebar.tsx` | 侧边栏左下角版本号文字（格式：`v0.x.x`） |
+| `src/components/Layout/WelcomePage.tsx` | 欢迎页标题版本显示（如有） |
+
+### 4. 更新 DOCUMENT.md（如有架构更新）
+- 阅读 DOCUMENT.md 检查是否有需要更新的内容
+- 包括顶部"当前版本"字段
+
+### 5. 提交并打标签
+```bash
+git add -A && git commit -m "$(cat <<'EOF'
+chore: 发布 v0.x.x
+
+版本更新说明
+EOF
+)"
+git tag -a v0.x.x -m "v0.x.x - 版本更新说明"
+```
+
+### 6. Push 远程仓库
+```bash
+git push
+git push origin v0.x.x
+```
+- 先 push commit，再 push tag
+- tag push 会触发 CI/CD 自动打包
+
 ---
 
 ## 提交后的状态
@@ -136,3 +145,5 @@ commit 完成后，告知用户：
 - commit hash（前 7 位）
 - 所在分支
 - 简要描述改动内容
+
+tag push 后告知用户 CI/CD 已触发，打包完成后可在 GitHub Releases 下载。
