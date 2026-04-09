@@ -2,10 +2,9 @@ import { useState, useCallback, DragEvent } from 'react'
 import { Button, Typography, message } from 'antd'
 import { FolderOpenOutlined, FolderAddOutlined } from '@ant-design/icons'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
+import { VersionLink } from '../Settings/VersionHistory'
 
 const { Title, Text } = Typography
-
-const APP_VERSION = '0.5.7'
 
 export function WelcomePage() {
   const { openWorkspace, isLoading } = useWorkspace()
@@ -101,9 +100,7 @@ export function WelcomePage() {
               Project Gutenberg 书籍下载工具
             </Text>
             <div style={{ marginTop: 8 }}>
-              <Text style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-                v{APP_VERSION}
-              </Text>
+              <VersionLink />
             </div>
           </div>
 

@@ -1,6 +1,7 @@
 import { Menu } from 'antd'
 import { SearchOutlined, DownloadOutlined, BookOutlined, TagsOutlined, PictureOutlined, CloudUploadOutlined } from '@ant-design/icons'
 import { useWorkspace, PageType } from '../../contexts/WorkspaceContext'
+import { VersionLink } from '../Settings/VersionHistory'
 
 const menuItems = [
   {
@@ -80,13 +81,12 @@ export function Sidebar() {
       <div
         style={{
           padding: '12px 16px',
-          color: 'rgba(255,255,255,0.25)',
           fontSize: 11,
           fontWeight: 500,
           letterSpacing: '0.5px'
         }}
       >
-        v0.6.1
+        <VersionLink style={{ color: 'rgba(255,255,255,0.25)' }} />
       </div>
     </div>
   )

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Modal, Form, Input, AutoComplete, InputNumber, Button, Space, Divider, message, Tag, Switch, Row, Col, Segmented } from 'antd'
 import { SettingOutlined, SaveOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, MoonOutlined, LockOutlined, EditOutlined, BugOutlined } from '@ant-design/icons'
 import { useTheme } from '../../contexts/ThemeContext'
+import { VersionLink } from './VersionHistory'
 
 interface SettingsModalProps {
   open: boolean
@@ -434,25 +435,28 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       {/* 底部按钮 */}
       <div style={{
         display: 'flex',
-        justifyContent: 'flex-end',
-        gap: 12,
+        justifyContent: 'space-between',
+        alignItems: 'center',
         padding: '16px 24px 0',
         borderTop: '1px solid var(--border-color)',
         marginTop: 16
       }}>
-        <Button size="large" onClick={onClose}>
-          取消
-        </Button>
-        <Button
-          type="primary"
-          size="large"
-          icon={<SaveOutlined />}
-          loading={loading}
-          onClick={handleSave}
-          style={{ borderRadius: 8, padding: '8px 24px' }}
-        >
-          保存
-        </Button>
+        <VersionLink />
+        <Space>
+          <Button size="large" onClick={onClose}>
+            取消
+          </Button>
+          <Button
+            type="primary"
+            size="large"
+            icon={<SaveOutlined />}
+            loading={loading}
+            onClick={handleSave}
+            style={{ borderRadius: 8, padding: '8px 24px' }}
+          >
+            保存
+          </Button>
+        </Space>
       </div>
     </Modal>
   )
