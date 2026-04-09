@@ -519,10 +519,14 @@ export function SearchPage() {
               预下载
             </Button>
             <Button
-              onClick={clearSearchResultSelection}
+              danger
+              onClick={() => {
+                removeFromSearchResults(selectedRowKeys)
+                clearSearchResultSelection()
+              }}
               disabled={selectedRowKeys.length === 0}
             >
-              清空
+              删除 ({selectedRowKeys.length})
             </Button>
           </Space>
         </Card>
