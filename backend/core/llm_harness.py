@@ -4,6 +4,8 @@ LLM Harness - 大模型调用封装，用于获取书籍元数据
 
 import json
 import httpx
+import asyncio
+import time
 from typing import Optional
 
 # 分类映射：数字 -> 分类名称
@@ -447,58 +449,81 @@ async def call_llm_single(
     api_key: str,
     base_url: str,
     model: str,
-    timeout: float = 60.0
+    timeout: float = 60.0,
+    max_retries: int = 3,
+    retry_delay: float = 2.0
 ) -> dict:
-    """调用 LLM 获取单本书的元数据"""
+    """调用 LLM 获取单本书的元数据
+
+    Args:
+        max_retries: 最大重试次数（仅对 500/502/503/504 错误重试）
+        retry_delay: 重试间隔（秒）
+    """
     prompt = build_single_prompt(title, author)
 
     async with httpx.AsyncClient(timeout=timeout) as client:
-        try:
-            response = await client.post(
-                f"{base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": model,
-                    "messages": [
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.3,
-                    "max_tokens": 1000
-                }
-            )
+        retry_count = 0
 
-            if response.status_code != 200:
-                error_detail = response.text[:500] if response.text else "No response body"
-                print(f"[LLM Error] Status: {response.status_code}, Response: {error_detail}")
+        while retry_count <= max_retries:
+            try:
+                response = await client.post(
+                    f"{base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.3,
+                        "max_tokens": 1000
+                    }
+                )
+
+                # 500 错误需要重试
+                if response.status_code in (500, 502, 503, 504):
+                    retry_count += 1
+                    print(f"[LLM Warning] Server error {response.status_code}, retry {retry_count}/{max_retries}...")
+                    if retry_count <= max_retries:
+                        await asyncio.sleep(retry_delay * retry_count)  # 指数退避
+                        continue
+                    else:
+                        return {
+                            "success": False,
+                            "error": f"LLM API 服务暂时不可用 (状态码: {response.status_code})，已重试 {max_retries} 次仍失败"
+                        }
+
+                if response.status_code != 200:
+                    error_detail = response.text[:500] if response.text else "No response body"
+                    print(f"[LLM Error] Status: {response.status_code}, Response: {error_detail}")
+                    return {
+                        "success": False,
+                        "error": f"LLM API error: {response.status_code}, detail: {error_detail}"
+                    }
+
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+
+                if content is None:
+                    return {
+                        "success": False,
+                        "error": "LLM returned empty response"
+                    }
+
+                return parse_single_response(content)
+
+            except httpx.TimeoutException:
                 return {
                     "success": False,
-                    "error": f"LLM API error: {response.status_code}, detail: {error_detail}"
+                    "error": "LLM request timeout"
                 }
-
-            data = response.json()
-            content = data["choices"][0]["message"]["content"]
-
-            if content is None:
+            except Exception as e:
                 return {
                     "success": False,
-                    "error": "LLM returned empty response"
+                    "error": f"LLM request failed: {str(e)}"
                 }
-
-            return parse_single_response(content)
-
-        except httpx.TimeoutException:
-            return {
-                "success": False,
-                "error": "LLM request timeout"
-            }
-        except Exception as e:
-            return {
-                "success": False,
-                "error": f"LLM request failed: {str(e)}"
-            }
 
 
 async def call_llm_batch(
@@ -506,9 +531,16 @@ async def call_llm_batch(
     api_key: str,
     base_url: str,
     model: str,
-    timeout: float = 120.0
+    timeout: float = 120.0,
+    max_retries: int = 3,
+    retry_delay: float = 2.0
 ) -> list[dict]:
-    """调用 LLM 批量获取多本书的元数据"""
+    """调用 LLM 批量获取多本书的元数据
+
+    Args:
+        max_retries: 最大重试次数（仅对 500/502/503/504 错误重试）
+        retry_delay: 重试间隔（秒）
+    """
     if not books:
         return []
 
@@ -520,51 +552,69 @@ async def call_llm_batch(
             "error": f"Failed to build prompt: {str(e)}"
         } for _ in books]
 
+    last_error = None
+    retry_count = 0
+
     async with httpx.AsyncClient(timeout=timeout) as client:
-        try:
-            response = await client.post(
-                f"{base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "model": model,
-                    "messages": [
-                        {"role": "user", "content": prompt}
-                    ],
-                    "temperature": 0.3,
-                    "max_tokens": 4000
-                }
-            )
+        while retry_count <= max_retries:
+            try:
+                response = await client.post(
+                    f"{base_url}/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": model,
+                        "messages": [
+                            {"role": "user", "content": prompt}
+                        ],
+                        "temperature": 0.3,
+                        "max_tokens": 4000
+                    }
+                )
 
-            if response.status_code != 200:
-                # 记录详细的错误信息以便调试
-                error_detail = response.text[:500] if response.text else "No response body"
-                print(f"[LLM Error] Status: {response.status_code}, Response: {error_detail}")
+                # 500 错误需要重试
+                if response.status_code in (500, 502, 503, 504):
+                    retry_count += 1
+                    last_error = f"LLM API error: {response.status_code}, detail: {response.text[:200]}"
+                    print(f"[LLM Warning] Server error {response.status_code}, retry {retry_count}/{max_retries}...")
+                    if retry_count <= max_retries:
+                        await asyncio.sleep(retry_delay * retry_count)  # 指数退避
+                        continue
+                    else:
+                        print(f"[LLM Error] Max retries reached. Last error: {last_error}")
+                        return [{
+                            "success": False,
+                            "error": f"LLM API 服务暂时不可用 (状态码: {response.status_code})，已重试 {max_retries} 次仍失败"
+                        } for _ in books]
+
+                if response.status_code != 200:
+                    error_detail = response.text[:500] if response.text else "No response body"
+                    print(f"[LLM Error] Status: {response.status_code}, Response: {error_detail}")
+                    return [{
+                        "success": False,
+                        "error": f"LLM API error: {response.status_code}, detail: {error_detail}"
+                    } for _ in books]
+
+                data = response.json()
+                content = data["choices"][0]["message"]["content"]
+
+                if content is None:
+                    return [{
+                        "success": False,
+                        "error": "LLM returned empty response"
+                    } for _ in books]
+
+                return parse_batch_response(content, len(books))
+
+            except httpx.TimeoutException:
                 return [{
                     "success": False,
-                    "error": f"LLM API error: {response.status_code}, detail: {error_detail}"
+                    "error": "LLM request timeout"
                 } for _ in books]
-
-            data = response.json()
-            content = data["choices"][0]["message"]["content"]
-
-            if content is None:
+            except Exception as e:
                 return [{
                     "success": False,
-                    "error": "LLM returned empty response"
+                    "error": f"LLM request failed: {str(e)}"
                 } for _ in books]
-
-            return parse_batch_response(content, len(books))
-
-        except httpx.TimeoutException:
-            return [{
-                "success": False,
-                "error": "LLM request timeout"
-            } for _ in books]
-        except Exception as e:
-            return [{
-                "success": False,
-                "error": f"LLM request failed: {str(e)}"
-            } for _ in books]
