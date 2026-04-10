@@ -141,9 +141,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         })
       } else {
         setLlmMode('preset')
-        setSelectedPreset('minimax')
+        setSelectedPreset(PRESET_MODELS[0].id)
         form.setFieldsValue({
-          llm: PRESET_MODELS.find(p => p.id === 'minimax') || PRESET_MODELS[0],
+          llm: PRESET_MODELS[0],
           download: DEFAULT_CONFIG.download,
           debugMode: false
         })
@@ -151,7 +151,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     } catch (error) {
       console.error('加载配置失败:', error)
       setLlmMode('preset')
-      setSelectedPreset('minimax')
+      setSelectedPreset(PRESET_MODELS[0].id)
       form.setFieldsValue({ llm: PRESET_MODELS[0], download: DEFAULT_CONFIG.download, debugMode: false })
     }
   }

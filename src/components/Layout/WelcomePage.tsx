@@ -57,10 +57,6 @@ export function WelcomePage() {
 
   return (
     <div
-      className={`drop-zone ${isDragging ? 'active' : ''}`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -68,7 +64,7 @@ export function WelcomePage() {
         background: 'var(--bg-primary)'
       }}
     >
-      {/* 顶部拖动区域（无内容，仅保留 macOS 红绿灯空间） */}
+      {/* 顶部拖动区域（macOS 红绿灯空间 + 窗口拖动） */}
       <div
         className="title-bar-drag"
         style={{
@@ -78,8 +74,12 @@ export function WelcomePage() {
         }}
       />
 
-      {/* 主内容区 */}
+      {/* 主内容区（文件拖放区域） */}
       <div
+        className={`drop-zone ${isDragging ? 'active' : ''}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
         style={{
           flex: 1,
           display: 'flex',
