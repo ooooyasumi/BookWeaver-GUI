@@ -470,9 +470,11 @@ async def call_llm_single(
             )
 
             if response.status_code != 200:
+                error_detail = response.text[:500] if response.text else "No response body"
+                print(f"[LLM Error] Status: {response.status_code}, Response: {error_detail}")
                 return {
                     "success": False,
-                    "error": f"LLM API error: {response.status_code}"
+                    "error": f"LLM API error: {response.status_code}, detail: {error_detail}"
                 }
 
             data = response.json()
@@ -536,9 +538,12 @@ async def call_llm_batch(
             )
 
             if response.status_code != 200:
+                # 记录详细的错误信息以便调试
+                error_detail = response.text[:500] if response.text else "No response body"
+                print(f"[LLM Error] Status: {response.status_code}, Response: {error_detail}")
                 return [{
                     "success": False,
-                    "error": f"LLM API error: {response.status_code}"
+                    "error": f"LLM API error: {response.status_code}, detail: {error_detail}"
                 } for _ in books]
 
             data = response.json()

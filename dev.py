@@ -11,11 +11,41 @@ import sys
 import signal
 import subprocess
 import time
+import socket
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 BACKEND_DIR = os.path.join(ROOT, "backend")
 
 processes = []
+
+
+def is_port_in_use(port: int) -> bool:
+    """检查端口是否被占用"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        return s.connect_ex(('localhost', port)) == 0
+
+
+def kill_port_process(port: int):
+    """杀掉占用指定端口的进程"""
+    try:
+        # macOS/Linux: 使用 lsof 找到占用端口的进程
+        result = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True,
+            text=True
+        )
+        if result.stdout.strip():
+            pids = result.stdout.strip().split('\n')
+            for pid in pids:
+                try:
+                    pid_int = int(pid)
+                    print(f"正在杀掉占用端口 {port} 的进程 (PID={pid_int})...")
+                    os.kill(pid_int, signal.SIGTERM)
+                    time.sleep(0.5)
+                except (ValueError, ProcessLookupError, PermissionError):
+                    pass
+    except Exception as e:
+        print(f"尝试清理端口时出错: {e}")
 
 
 def shutdown(signum=None, frame=None):
@@ -35,9 +65,17 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    print("启动后端 (FastAPI :8765) ...")
+    PORT = 8765
+
+    # 检查端口是否被占用，若被占用则自动清理
+    if is_port_in_use(PORT):
+        print(f"端口 {PORT} 已被占用，正在清理...")
+        kill_port_process(PORT)
+        time.sleep(1)
+
+    print(f"启动后端 (FastAPI :{PORT}) ...")
     backend = subprocess.Popen(
-        [sys.executable, "-m", "uvicorn", "main:app", "--reload", "--port", "8765"],
+        [sys.executable, "-m", "uvicorn", "main:app", "--reload", "--port", str(PORT)],
         cwd=BACKEND_DIR,
         start_new_session=True,
     )
