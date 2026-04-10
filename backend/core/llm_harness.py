@@ -152,17 +152,17 @@ Respond with this exact JSON structure:
   "success": true or false,
   "error": null or "reason if failed to find the book",
   "metadata": {{
-    "description": "A 150-300 word English description of the book",
+    "description": "A 30-500 word English description of the book",
     "categories": [1, 2],
     "publishYear": 1813 or negative year for BC
   }}
 }}
 
 Rules:
-1. description MUST be 150-300 words in English
+1. description MUST be 30-500 words (focus on accuracy and completeness)
 2. categories MUST be 1-3 NUMBERS from this list (pick the MOST SPECIFIC categories, avoid 34 "Science (General)" when a specific science exists):
 {categories}
-3. publishYear MUST be the ORIGINAL/FIRST publication year (4-digit integer or negative for BC), not reprint dates
+3. publishYear MUST be the ORIGINAL/FIRST publication year (positive integer for AD, negative for BC), not reprint dates
 4. If you cannot find reliable information about this book, set success to false and provide an error reason
 5. Do not make up information - only provide what you can verify
 6. Output ONLY the JSON, no markdown code blocks, no explanations
@@ -186,17 +186,17 @@ Respond with a JSON array where each item has:
   "success": true or false,
   "error": null or "reason if failed",
   "metadata": {{
-    "description": "150-300 word English description",
+    "description": "A 30-500 word English description",
     "categories": [1, 2],
     "publishYear": 1813 or negative year for BC
   }}
 }}
 
 Rules:
-1. description MUST be 150-300 words in English
+1. description MUST be 30-500 words (focus on accuracy and completeness)
 2. categories MUST be 1-3 NUMBERS from this list (pick the MOST SPECIFIC categories, avoid 34 "Science (General)" when a specific science exists):
 {categories}
-3. publishYear MUST be the ORIGINAL/FIRST publication year (4-digit integer or negative for BC), not reprint dates
+3. publishYear MUST be the ORIGINAL/FIRST publication year (positive integer for AD, negative for BC), not reprint dates
 4. If you cannot find reliable information, set success to false
 5. Return results in the same order as input (match by index field)
 6. Output ONLY the JSON array, no markdown code blocks, no explanations
@@ -246,8 +246,8 @@ def validate_metadata(metadata: dict) -> tuple[bool, Optional[str]]:
         return False, "description must be a string"
 
     word_count = len(description.split())
-    if word_count < 150 or word_count > 300:
-        return False, f"description word count must be 150-300, got {word_count}"
+    if word_count < 30 or word_count > 500:
+        return False, f"description word count must be 30-500, got {word_count}"
 
     # 验证分类（现在是数字，限制 1-3 个）
     categories = metadata.get("categories", [])
