@@ -32,6 +32,7 @@ const LLM_MODELS = [
   { label: 'MiniMax M2', value: 'MiniMax-M2' },
   { label: 'Qwen 3.5 Plus', value: 'qwen3.5-plus' },
   { label: 'Qwen 3.5 Turbo', value: 'qwen3.5-turbo' },
+  { label: 'Qwen VL Flash', value: 'qwen3-vl-flash-2026-01-22' },
   { label: 'Qwen Max', value: 'qwen-max' },
   { label: 'GPT-4o', value: 'gpt-4o' },
   { label: 'GPT-4o Mini', value: 'gpt-4o-mini' },
@@ -55,6 +56,13 @@ const PRESET_MODELS = [
     label: 'Qwen 3.5 Flash',
     apiKey: 'sk-94165d0f233b417da98b6515dcc63ada',
     model: 'qwen3.5-flash',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  },
+  {
+    id: 'qwen-vl',
+    label: 'Qwen VL Flash',
+    apiKey: 'sk-94165d0f233b417da98b6515dcc63ada',
+    model: 'qwen3-vl-flash-2026-01-22',
     baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   },
 ]
