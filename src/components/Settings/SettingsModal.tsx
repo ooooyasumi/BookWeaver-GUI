@@ -100,7 +100,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const apiKey = Form.useWatch(['llm', 'apiKey'], form)
   const baseUrl = Form.useWatch(['llm', 'baseUrl'], form)
   const model = Form.useWatch(['llm', 'model'], form)
-  const debugMode = Form.useWatch(['debugMode'], form)
+  // useWatch 监听 debugMode 变化，触发组件更新
+  const debugModeWatch = Form.useWatch(['debugMode'], form)
   const canTest = llmMode === 'preset' || !!(apiKey?.trim() && baseUrl?.trim() && model?.trim())
 
   // 加载配置
@@ -251,10 +252,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       width={640}
       footer={null}
       styles={{
-        body: { padding: '24px 0' }
+        body: { padding: '24px 0', maxHeight: '70vh', overflowY: 'auto' }
       }}
     >
-      <div style={{ padding: '0 24px' }}>
+      <div style={{ padding: '0 24px', overflow: 'visible' }}>
         {/* 外观设置 */}
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -474,7 +475,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         </div>
 
         {/* 调试日志终端 */}
-        <LogConsole visible={!!debugMode} />
+        <LogConsole visible={!!debugModeWatch} />
       </div>
 
       {/* 底部按钮 */}
