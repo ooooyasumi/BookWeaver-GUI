@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Modal, Form, Input, AutoComplete, InputNumber, Button, Space, Divider, message, Tag, Switch, Row, Col, Segmented } from 'antd'
+import { Modal, Form, Input, AutoComplete, InputNumber, Button, Space, Divider, message, Tag, Switch, Row, Col, Segmented, Select } from 'antd'
 import { SettingOutlined, SaveOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, MoonOutlined, LockOutlined, EditOutlined, BugOutlined } from '@ant-design/icons'
 import { useTheme } from '../../contexts/ThemeContext'
 import { VersionLink } from './VersionHistory'
@@ -41,6 +41,24 @@ const LLM_MODELS = [
   { label: 'DeepSeek R1', value: 'deepseek-reasoner' },
 ]
 
+// 预设模型配置
+const PRESET_MODELS = [
+  {
+    id: 'minimax',
+    label: 'MiniMax M2',
+    apiKey: 'sk-cp-AyOemkvi0hh2K6tG1mN5c8PJCQaWbFNbPD3BDCAGx6XpSNVbFyvRyl2qMGEkotu334SJDxpkikqR7-mHuzaD1URXHsAvhG_JiLzEbqiPgiHyRmZVVJNDRcg',
+    model: 'MiniMax-M2',
+    baseUrl: 'https://api.minimaxi.com/v1',
+  },
+  {
+    id: 'qwen',
+    label: 'Qwen 3.5 Flash',
+    apiKey: 'sk-94165d0f233b417da98b6515dcc63ada',
+    model: 'qwen3.5-flash',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  },
+]
+
 // 写死的默认配置
 const PRESET_LLM: LLMConfig = {
   apiKey: 'sk-94165d0f233b417da98b6515dcc63ada',
@@ -76,6 +94,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [testingApi, setTestingApi] = useState(false)
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [llmMode, setLlmMode] = useState<'preset' | 'custom'>('preset')
+  const [selectedPreset, setSelectedPreset] = useState<string>('minimax')
   const { toggleTheme, isDark } = useTheme()
 
   const apiKey = Form.useWatch(['llm', 'apiKey'], form)
@@ -94,9 +113,13 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     try {
       const config = await window.electronAPI.getConfig()
       if (config) {
-        // 判断是否匹配预设配置（apiKey 相同则认为是预设模式）
-        const isPreset = config.llm?.apiKey === PRESET_LLM.apiKey
+        // 判断是否匹配预设配置（apiKey 匹配任一预设则认为是预设模式）
+        const matchedPreset = PRESET_MODELS.find(p => p.apiKey === config.llm?.apiKey)
+        const isPreset = !!matchedPreset
         setLlmMode(isPreset ? 'preset' : 'custom')
+        if (matchedPreset) {
+          setSelectedPreset(matchedPreset.id)
+        }
         form.setFieldsValue({
           llm: {
             ...DEFAULT_CONFIG.llm,
@@ -110,8 +133,9 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         })
       } else {
         setLlmMode('preset')
+        setSelectedPreset('minimax')
         form.setFieldsValue({
-          llm: PRESET_LLM,
+          llm: PRESET_MODELS.find(p => p.id === 'minimax') || PRESET_MODELS[0],
           download: DEFAULT_CONFIG.download,
           debugMode: false
         })
@@ -119,7 +143,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     } catch (error) {
       console.error('加载配置失败:', error)
       setLlmMode('preset')
-      form.setFieldsValue({ llm: PRESET_LLM, download: DEFAULT_CONFIG.download, debugMode: false })
+      setSelectedPreset('minimax')
+      form.setFieldsValue({ llm: PRESET_MODELS[0], download: DEFAULT_CONFIG.download, debugMode: false })
     }
   }
 
@@ -129,7 +154,8 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     setLlmMode(mode)
     setTestStatus('idle')
     if (mode === 'preset') {
-      form.setFieldsValue({ llm: PRESET_LLM })
+      const preset = PRESET_MODELS.find(p => p.id === selectedPreset) || PRESET_MODELS[0]
+      form.setFieldsValue({ llm: preset })
     } else {
       form.setFieldsValue({
         llm: {
@@ -143,12 +169,22 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
     }
   }
 
+  // 切换预设模型时同步表单
+  const handlePresetChange = (presetId: string) => {
+    setSelectedPreset(presetId)
+    const preset = PRESET_MODELS.find(p => p.id === presetId)
+    if (preset) {
+      form.setFieldsValue({ llm: preset })
+    }
+  }
+
   const handleSave = async () => {
     try {
       const values = await form.validateFields()
-      // 预设模式下强制使用预设 LLM 配置
+      // 预设模式下强制使用选定预设的 LLM 配置
       if (llmMode === 'preset') {
-        values.llm = { ...PRESET_LLM, temperature: values.llm.temperature, maxTokens: values.llm.maxTokens }
+        const preset = PRESET_MODELS.find(p => p.id === selectedPreset) || PRESET_MODELS[0]
+        values.llm = { ...preset, temperature: values.llm.temperature, maxTokens: values.llm.maxTokens }
       }
       setLoading(true)
       await window.electronAPI.saveConfig(values)
@@ -166,7 +202,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const handleTestApi = async () => {
     try {
       const llmConfig = llmMode === 'preset'
-        ? PRESET_LLM
+        ? (PRESET_MODELS.find(p => p.id === selectedPreset) || PRESET_MODELS[0])
         : (await form.validateFields([['llm', 'apiKey'], ['llm', 'baseUrl'], ['llm', 'model']])).llm
 
       setTestingApi(true)
@@ -290,7 +326,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             </Col>
           </Row>
 
-          {/* 预设模式：只显示 Temperature / MaxTokens + 测试按钮 */}
+          {/* 预设模式：显示模型选择下拉 + Temperature / MaxTokens */}
           {isPreset ? (
             <div>
               <div style={{
@@ -302,11 +338,16 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               }}>
                 <Row gutter={8} align="middle">
                   <Col flex={1}>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 2 }}>模型</div>
-                    <div style={{ fontSize: 14, fontWeight: 500 }}>Qwen 3.5 Flash</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>预设模型</div>
+                    <Select
+                      value={selectedPreset}
+                      onChange={handlePresetChange}
+                      style={{ width: '100%' }}
+                      options={PRESET_MODELS.map(p => ({ label: p.label, value: p.id }))}
+                    />
                   </Col>
                   <Col>
-                    <Tag color="blue">内置</Tag>
+                    <Tag color="blue" style={{ marginTop: 24 }}>内置</Tag>
                   </Col>
                 </Row>
               </div>
