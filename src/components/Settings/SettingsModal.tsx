@@ -295,6 +295,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
                 <Switch
                   checkedChildren="开"
                   unCheckedChildren="关"
+                  onChange={(checked) => setDebugMode(checked)}
                 />
               </Col>
             </Row>
