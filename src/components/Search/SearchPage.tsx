@@ -85,6 +85,24 @@ export function SearchPage() {
   const [aiMessages, setAiMessages] = useState<Message[]>([])
   const [aiInput, setAiInput] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const autoScrollRef = useRef(true)
+
+  // 滚动到底部
+  const scrollToBottom = () => {
+    if (autoScrollRef.current && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight
+    }
+  }
+
+  // 处理手动滚动：检测用户是否手动滚动，若滚动则停止自动滚动
+  const handleScroll = () => {
+    if (scrollContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 50
+      autoScrollRef.current = isAtBottom
+    }
+  }
 
   // 调试信息状态
   const [debugInfo, setDebugInfo] = useState<string>('')
@@ -242,6 +260,7 @@ export function SearchPage() {
       return next
     })
     setAiInput('')
+    autoScrollRef.current = true
     setAiLoading(true)
 
     try {
@@ -344,6 +363,7 @@ export function SearchPage() {
                     aiMessagesRef.current = next
                     return next
                   })
+                  scrollToBottom()
                 } else {
                   // 后续 token：原地更新
                   setAiMessages(prev => {
@@ -354,6 +374,7 @@ export function SearchPage() {
                     aiMessagesRef.current = msgs
                     return msgs
                   })
+                  scrollToBottom()
                 }
 
               } else if (event.type === 'tool_status') {
@@ -400,6 +421,7 @@ export function SearchPage() {
                     return msgs
                   })
                 }
+                scrollToBottom()
 
               } else if (event.type === 'error') {
                 message.error(event.content)
@@ -598,7 +620,7 @@ export function SearchPage() {
       >
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           {/* 消息列表 */}
-          <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16 }} ref={scrollContainerRef} onScroll={handleScroll}>
             {aiMessages.length === 0 && (
               <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-tertiary)' }}>
                 <MessageOutlined style={{ fontSize: 32, display: 'block', marginBottom: 12, opacity: 0.4 }} />
