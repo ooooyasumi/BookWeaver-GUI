@@ -455,6 +455,12 @@ async def call_llm_single(
             data = response.json()
             content = data["choices"][0]["message"]["content"]
 
+            if content is None:
+                return {
+                    "success": False,
+                    "error": "LLM returned empty response"
+                }
+
             return parse_single_response(content)
 
         except httpx.TimeoutException:
