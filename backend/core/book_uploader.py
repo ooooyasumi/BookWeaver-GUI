@@ -17,6 +17,24 @@ from ebooklib import epub
 from .llm_harness import CATEGORY_MAP
 from .epub_meta import _to_rel, _to_abs, _extract_cover_image
 
+# ==================== 字符串清洗 ====================
+
+# 预编译正则，匹配 emoji 和特殊符号（清洗时重用，避免重复编译）
+_emoji_pattern = re.compile(r'[\U00010000-\U0010ffff]')
+_special_pattern = re.compile(r'[\u2000-\u2fff\u3000-\u303f\uff00-\uffef]')
+
+
+def clean_text(text):
+    """
+    移除 emoji 和特殊符号，返回干净字符串。
+    解决书名/作者/简介含特殊字符（如 emoji、全角符号）导致的编码错误。
+    """
+    if not text:
+        return text
+    text = _emoji_pattern.sub('', text)
+    text = _special_pattern.sub('', text)
+    return text.strip()
+
 # ==================== 配置常量 ====================
 
 TOKEN = "AEB56C9F5AE17F07"
@@ -153,12 +171,12 @@ def extract_upload_metadata(file_path: str) -> Optional[Dict[str, Any]]:
         cover_data = _extract_cover(book)
 
         return {
-            "title": title,
-            "author": author,
-            "description": description,
+            "title": clean_text(title),
+            "author": clean_text(author),
+            "description": clean_text(description),
             "language": language,
-            "all_categories": all_categories,
-            "publish_name": publish_name,
+            "all_categories": [clean_text(s) for s in all_categories],
+            "publish_name": clean_text(publish_name),
             "publish_date": publish_date,
             "isbn": isbn,
             "cover_data": cover_data,
@@ -324,15 +342,15 @@ def prepare_book_data(
     language = metadata.get('language', 'English')
 
     book_data = {
-        "name": metadata.get('title', ''),
-        "author": metadata.get('author', ''),
-        "description": metadata.get('description', ''),
+        "name": clean_text(metadata.get('title', '')),
+        "author": clean_text(metadata.get('author', '')),
+        "description": clean_text(metadata.get('description', '')),
         "language": [language],
         "categoryIds": category_ids,
         "bookUrl": book_url,
         "coverUrl": cover_url,
         "fileExt": "epub",
-        "publishName": metadata.get('publish_name', ''),
+        "publishName": clean_text(metadata.get('publish_name', '')),
         "publishDate": metadata.get('publish_date', ''),
         "pageCount": 0,
     }
