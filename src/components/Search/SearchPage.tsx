@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Input, Button, Space, message, Checkbox, Drawer, Card, Segmented, Collapse } from 'antd'
+import { Input, Button, Space, message, Checkbox, Drawer, Card, Segmented, Collapse, Select } from 'antd'
 import { SearchOutlined, MessageOutlined, SendOutlined, PlusOutlined } from '@ant-design/icons'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { BookList } from '../Common/BookList'
@@ -13,6 +13,25 @@ const API_BASE = window.location.protocol === 'file:'
 
 // 搜索类型
 type SearchType = 'title' | 'author' | 'subject' | 'year'
+
+// 语言选项
+const LANGUAGE_OPTIONS = [
+  { label: '英语', value: 'en' },
+  { label: '西班牙语', value: 'es' },
+  { label: '德语', value: 'de' },
+  { label: '法语', value: 'fr' },
+  { label: '葡萄牙语', value: 'pt' },
+  { label: '意大利语', value: 'it' },
+  { label: '俄语', value: 'ru' },
+  { label: '中文', value: 'zh' },
+  { label: '日语', value: 'ja' },
+  { label: '韩语', value: 'ko' },
+  { label: '荷兰语', value: 'nl' },
+  { label: '波兰语', value: 'pl' },
+  { label: '瑞典语', value: 'sv' },
+  { label: '印地语', value: 'hi' },
+  { label: '阿拉伯语', value: 'ar' },
+]
 
 // 从文本中提取思考块并移除
 function extractThinking(text: string): { content: string; thinking: string | undefined } {
@@ -76,6 +95,7 @@ export function SearchPage() {
   // 搜索相关状态
   const [searchText, setSearchText] = useState('')
   const [searchType, setSearchType] = useState<SearchType>('title')
+  const [searchLanguage, setSearchLanguage] = useState('en')
   const [loading, setLoading] = useState(false)
 
   const selectedRowKeys = searchResultSelectedKeys
@@ -143,6 +163,7 @@ export function SearchPage() {
       // 根据搜索类型构建查询参数
       const params = new URLSearchParams()
       params.set('limit', '1000')
+      params.set('language', searchLanguage)
 
       switch (searchType) {
         case 'title':
@@ -498,6 +519,13 @@ export function SearchPage() {
               { label: '分类', value: 'subject' },
               { label: '年份', value: 'year' },
             ]}
+            size="large"
+          />
+          <Select
+            value={searchLanguage}
+            onChange={setSearchLanguage}
+            options={LANGUAGE_OPTIONS}
+            style={{ width: 110 }}
             size="large"
           />
           <Button

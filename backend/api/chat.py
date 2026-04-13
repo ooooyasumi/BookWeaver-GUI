@@ -109,6 +109,24 @@ Output: {"type": "search_task", "target_count": 20, "keywords": ["war fiction", 
 User: 找经济学相关的书
 Output: {"type": "search_task", "target_count": 20, "keywords": ["economics", "political economy", "economic theory", "capitalism", "economic history"], "limit_per_keyword": 10, "language": "en"}
 
+User: 推荐20本西班牙语经典文学
+Output: {"type": "search_task", "target_count": 20, "keywords": ["literatura clásica", "novela histórica española", "ficción española", "literatura hispanoamericana", "novela realista"], "limit_per_keyword": 10, "language": "es"}
+
+User: 找一些德语科幻小说
+Output: {"type": "search_task", "target_count": 15, "keywords": ["Science-fiction", "Deutsche Science Fiction", "Klassische Science Fiction", "Zukunftsroman", "Raumfahrt Romane"], "limit_per_keyword": 10, "language": "de"}
+
+User: 法国文学名著有哪些
+Output: {"type": "search_task", "target_count": 20, "keywords": ["littérature française", "romans classiques français", "19e siècle littérature", "romans français", "prix Goncourt"], "limit_per_keyword": 10, "language": "fr"}
+
+User: 日本語の小説を探して
+Output: {"type": "search_task", "target_count": 15, "keywords": ["Japanese fiction", "日本語小説", "現代日本文学", "日本文学古典", "芥川賞作品"], "limit_per_keyword": 10, "language": "ja"}
+
+User: 找中文武侠小说
+Output: {"type": "search_task", "target_count": 20, "keywords": ["武侠小说", "中国武侠", "古典武侠", "金庸", "武侠文学"], "limit_per_keyword": 10, "language": "zh"}
+
+User: 推荐一些俄语文学
+Output: {"type": "search_task", "target_count": 15, "keywords": ["Русская литература", "классическая русская литература", "русские романы", "советская литература", "достоевский"], "limit_per_keyword": 10, "language": "ru"}
+
 User: 今天天气不错
 Output: {"type": "chat"}
 
@@ -119,15 +137,16 @@ Output Format（严格按照此 JSON 结构，不要加任何其他内容）:
 {
   "type": "search_task" | "chat",
   "target_count": <目标数量，整数，默认20>,
-  "keywords": [<英文关键词1>, <英文关键词2>, ...],
+  "keywords": [<关键词1>, <关键词2>, ...],
   "limit_per_keyword": <每个关键词搜索数量，整数>,
-  "language": "en"
+  "language": <语言代码，如 "en", "es", "de", "fr", "zh", "ja", "ru" 等>
 }
 
 Rules:
 - target_count：从用户消息中提取目标数量，没有明确数字时默认 20
-- keywords：必须用精确的英文主题词，直接对应书籍分类主题，避免口语化表达（如"悬疑小说"→"mystery fiction"而非"mystery novel"）。每类书籍给出5个以上不同角度的关键词，保证召回率。优先用 Gutenberg 目录中常见的分类表达。
+- keywords：必须用精确的主题词，直接对应书籍分类主题，避免口语化表达（如"悬疑小说"→"mystery fiction"而非"mystery novel"）。每类书籍给出5个以上不同角度的关键词，保证召回率。优先用 Gutenberg 目录中常见的分类表达。
 - limit_per_keyword：= ceil(target_count / len(keywords)) * 2，确保有足够冗余（因为去重后数量会减少）
+- language：根据用户语言意图设置语言代码。如用户说"西班牙语书籍"→"es"，"德语书籍"→"de"，"法语小说"→"fr"，"中文文学"→"zh"，"日语小说"→"ja"，"俄语文学"→"ru"。若用户未指定语言，默认 "en"。
 - 如果用户只是聊天（问问题、不需要搜书），输出：{"type": "chat"}
 - 只输出 JSON，不要任何解释，不要用 markdown 代码块包裹"""
 
