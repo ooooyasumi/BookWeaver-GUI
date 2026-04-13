@@ -667,6 +667,9 @@ async def upload_single_book(
 
 # ==================== 批量上传 ====================
 
+MAX_CONCURRENT_UPLOAD = 3
+
+
 async def upload_books_batch(
     workspace_path: str,
     files: List[Dict[str, Any]],
@@ -674,7 +677,7 @@ async def upload_books_batch(
     progress_callback=None,
 ) -> Dict[str, Any]:
     """
-    批量上传书籍（顺序执行）
+    批量上传书籍（并发执行，最多 MAX_CONCURRENT_UPLOAD 同时上传）
 
     Args:
         workspace_path: 工作区路径
@@ -686,48 +689,74 @@ async def upload_books_batch(
         { success, failed, skipped, results }
     """
     reset_cancel_flag()
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_UPLOAD)
 
-    results = []
+    # 结果顺序与 files 一致（按 index 填充）
+    results: List[Dict[str, Any]] = [None] * len(files)
+    index_map = {f["filePath"]: i for i, f in enumerate(files)}
+
     success_count = 0
     failed_count = 0
     skipped_count = 0
+    counter = 0
+    counter_lock = asyncio.Lock()
 
-    for i, file_info in enumerate(files):
-        if is_cancelled():
-            results.append({
-                "filePath": file_info["filePath"],
-                "title": file_info.get("title", ""),
-                "success": False,
-                "error": "Cancelled",
-                "status": "cancelled",
-            })
-            failed_count += 1
-            continue
+    async def process_one(file_info: Dict[str, Any], index: int) -> None:
+        nonlocal success_count, failed_count, skipped_count, counter
 
-        result = await upload_single_book(
-            file_path=file_info["filePath"],
-            base_url=base_url,
-            workspace_path=workspace_path,
-            progress_callback=progress_callback,
-        )
+        async with semaphore:
+            if is_cancelled():
+                result = {
+                    "filePath": file_info["filePath"],
+                    "title": file_info.get("title", ""),
+                    "success": False,
+                    "error": "Cancelled",
+                    "status": "cancelled",
+                }
+            else:
+                result = await upload_single_book(
+                    file_path=file_info["filePath"],
+                    base_url=base_url,
+                    workspace_path=workspace_path,
+                    progress_callback=progress_callback,
+                )
 
-        results.append(result)
+            # 按原始顺序写入结果
+            results[index] = result
 
-        if result["success"]:
-            success_count += 1
-        elif result.get("status") == "skipped":
-            skipped_count += 1
-        else:
-            failed_count += 1
+            async with counter_lock:
+                counter += 1
+                if result["success"]:
+                    success_count += 1
+                elif result.get("status") == "skipped":
+                    skipped_count += 1
+                else:
+                    failed_count += 1
 
+                # 每本书完成时 fire 一次 progress（前端进度条更新）
+                if progress_callback:
+                    await safe_callback(progress_callback, {
+                        "type": "progress",
+                        "processed": counter,
+                        "total": len(files),
+                        "success": success_count,
+                        "failed": failed_count,
+                        "skipped": skipped_count,
+                        "latestResult": result,
+                    })
+
+    # 提交所有任务（as_completed 保证每本完成立即触发回调）
+    tasks = [asyncio.create_task(process_one(f, i)) for i, f in enumerate(files)]
+    await asyncio.gather(*tasks)
+
+    # 最终 done 事件
+    if progress_callback:
         await safe_callback(progress_callback, {
-            "type": "progress",
-            "processed": i + 1,
-            "total": len(files),
+            "type": "done",
             "success": success_count,
             "failed": failed_count,
             "skipped": skipped_count,
-            "latestResult": result,
+            "results": results,
         })
 
     return {
