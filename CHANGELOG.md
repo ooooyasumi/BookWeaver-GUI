@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.7] - 2026-04-13
+
+### Fixed
+
+- **元数据作者校验逻辑**：修正校验为检查原书是否有作者，而非 LLM 返回值（LLM 不返回 author 字段，旧逻辑导致全部书籍报"缺少作者"失败）
+
 ## [0.6.6] - 2026-04-13
 
 ### Added
