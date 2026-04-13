@@ -12,10 +12,19 @@ interface VersionEntry {
   changed: string[]
 }
 
-const CURRENT_VERSION = '0.6.4'
+const CURRENT_VERSION = '0.6.5'
 
 // 内嵌的版本历史数据（与 CHANGELOG.md 保持同步）
 const VERSION_HISTORY: VersionEntry[] = [
+  {
+    version: '0.6.5',
+    date: '2026-04-13',
+    added: [],
+    fixed: [
+      '批量上传异常流处理：safe_print防GBK编码卡死，safe_callback防异常打断循环',
+    ],
+    changed: [],
+  },
   {
     version: '0.6.4',
     date: '2026-04-13',
