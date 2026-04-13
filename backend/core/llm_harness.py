@@ -149,6 +149,10 @@ Output: {{"success": true, "error": null, "metadata": {{"description": "On the O
 Input: Title: "Unknown Book XYZ", Author: "Nonexistent Author"
 Output: {{"success": false, "error": "Cannot find reliable information about this book", "metadata": null}}
 
+
+Input: Title: "Adventures of Huckleberry Finn", Author: ""
+Output: {{"success": true, "error": null, "metadata": {{"description": "Adventures of Huckleberry Finn is a novel by Mark Twain, published in 1884. It follows Huck Finn and the runaway slave Jim as they travel down the Mississippi River on a raft. The novel is a sharp satirical critique of racism and the moral failures of antebellum Southern society.", "categories": [16], "publishYear": 1884, "author": "Mark Twain"}}}}
+
 Respond with this exact JSON structure:
 {{
   "success": true or false,
@@ -156,7 +160,8 @@ Respond with this exact JSON structure:
   "metadata": {{
     "description": "A 30-500 word English description of the book",
     "categories": [1, 2],
-    "publishYear": 1813 or negative year for BC
+    "publishYear": 1813 or negative year for BC,
+    "author": "verified author name, or null if truly unknown"
   }}
 }}
 
@@ -168,7 +173,8 @@ Rules:
 4. If you cannot find reliable information about this book, set success to false and provide an error reason
 5. Do not make up information - only provide what you can verify
 6. Output ONLY the JSON, no markdown code blocks, no explanations
-7. Category selection guide: Fiction novels → [16] or genre-specific [17 Fantasy/33 SciFi/32 Romance/10 Crime]; Non-fiction → pick the specific discipline [3 Biography/4 Biology/18 History/31 Religion/36 Philosophy/29 Psychology etc.]; General social/political → [36]; Literature/Classics with no specific genre → [16]; Science books → specific science [2 Astronomy/6 Chemistry/27 Physics/4 Biology] not [34]"""
+7. Category selection guide: Fiction novels → [16] or genre-specific [17 Fantasy/33 SciFi/32 Romance/10 Crime]; Non-fiction → pick the specific discipline [3 Biography/4 Biology/18 History/31 Religion/36 Philosophy/29 Psychology etc.]; General social/political → [36]; Literature/Classics with no specific genre → [16]; Science books → specific science [2 Astronomy/6 Chemistry/27 Physics/4 Biology] not [34]
+8. author: always include the verified author name. If the input Author field is empty or missing, identify the author from the book title. If the author is truly unknown, set to null"""
 
 BATCH_PROMPT_TEMPLATE = """You are a book metadata expert. Given multiple book titles and authors, provide structured metadata for each.
 
@@ -190,7 +196,8 @@ Respond with a JSON array where each item has:
   "metadata": {{
     "description": "A 30-500 word English description",
     "categories": [1, 2],
-    "publishYear": 1813 or negative year for BC
+    "publishYear": 1813 or negative year for BC,
+    "author": "verified author name, or null if truly unknown"
   }}
 }}
 
@@ -202,7 +209,8 @@ Rules:
 4. If you cannot find reliable information, set success to false
 5. Return results in the same order as input (match by index field)
 6. Output ONLY the JSON array, no markdown code blocks, no explanations
-7. Category selection guide: Fiction novels → [16] or genre-specific [17 Fantasy/33 SciFi/32 Romance/10 Crime]; Non-fiction → pick the specific discipline [3 Biography/4 Biology/18 History/31 Religion/36 Philosophy/29 Psychology etc.]; General social/political → [36]; Literature/Classics with no specific genre → [16]; Science books → specific science [2 Astronomy/6 Chemistry/27 Physics/4 Biology] not [34]"""
+7. Category selection guide: Fiction novels → [16] or genre-specific [17 Fantasy/33 SciFi/32 Romance/10 Crime]; Non-fiction → pick the specific discipline [3 Biography/4 Biology/18 History/31 Religion/36 Philosophy/29 Psychology etc.]; General social/political → [36]; Literature/Classics with no specific genre → [16]; Science books → specific science [2 Astronomy/6 Chemistry/27 Physics/4 Biology] not [34]
+8. author: always include the verified author name. If the input Author field is empty or missing, identify the author from the book title. If the author is truly unknown, set to null"""
 
 
 def convert_category_ids_to_names(category_ids: list) -> list[str]:
@@ -368,12 +376,18 @@ def parse_single_response(response_text: str) -> dict:
     # 将分类数字转换为分类名称
     category_names = convert_category_ids_to_names(metadata["categories"])
 
+    # 提取 author（可能为 null）
+    author = metadata.get("author") or None
+    if author and not isinstance(author, str):
+        author = None
+
     return {
         "success": True,
         "metadata": {
             "description": metadata["description"],
             "categories": category_names,
-            "publishYear": metadata["publishYear"]
+            "publishYear": metadata["publishYear"],
+            "author": author,
         }
     }
 
@@ -431,12 +445,18 @@ def parse_batch_response(response_text: str, expected_count: int) -> list[dict]:
             # 将分类数字转换为分类名称
             category_names = convert_category_ids_to_names(metadata["categories"])
 
+            # 提取 author（可能为 null）
+            author = metadata.get("author") or None
+            if author and not isinstance(author, str):
+                author = None
+
             results.append({
                 "success": True,
                 "metadata": {
                     "description": metadata["description"],
                     "categories": category_names,
-                    "publishYear": metadata["publishYear"]
+                    "publishYear": metadata["publishYear"],
+                    "author": author,
                 }
             })
 

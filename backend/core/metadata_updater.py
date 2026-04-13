@@ -63,6 +63,12 @@ def update_epub_metadata(file_path: str, metadata: dict) -> tuple:
                 if field in book.metadata[dc_ns]:
                     book.metadata[dc_ns][field] = []
 
+        # 如果需要写入作者（原书无作者时）
+        if metadata.get('author'):
+            if dc_ns in book.metadata and 'creator' in book.metadata[dc_ns]:
+                book.metadata[dc_ns]['creator'] = []
+            book.add_metadata('DC', 'creator', metadata['author'])
+
         # 添加新的元数据
         # 更新简介 (DC:description)
         book.add_metadata('DC', 'description', metadata['description'])
@@ -265,18 +271,26 @@ async def update_metadata_for_files(
 
                 metadata = llm_result["metadata"]
 
-                # 作者必填校验：原书已有作者则放行，原书无作者则报错
-                existing_author = file_info.get("author") or ""
-                if not existing_author.strip():
-                    error = "缺少作者"
-                    update_file_metadata_status(workspace_path, file_info["filePath"], updated=False, error=error)
-                    batch_results.append({
-                        "filePath": file_info["filePath"],
-                        "title": file_info["title"],
-                        "success": False,
-                        "error": error,
-                    })
-                    continue
+                # 作者逻辑：
+                # - 原书有作者 → 不动，metadata 中不传 author
+                # - 原书无作者 → 用 LLM 返回的 author；LLM 也返回不了 → 报错
+                existing_author = (file_info.get("author") or "").strip()
+                if existing_author:
+                    # 原书有作者，不传 author 给 update_epub_metadata
+                    metadata.pop("author", None)
+                else:
+                    llm_author = (metadata.get("author") or "").strip()
+                    if not llm_author:
+                        error = "缺少作者"
+                        update_file_metadata_status(workspace_path, file_info["filePath"], updated=False, error=error)
+                        batch_results.append({
+                            "filePath": file_info["filePath"],
+                            "title": file_info["title"],
+                            "success": False,
+                            "error": error,
+                        })
+                        continue
+                    # 有 LLM 作者，保留在 metadata 中供 update_epub_metadata 写入
 
                 success, error = update_epub_metadata(file_info["filePath"], metadata)
 
