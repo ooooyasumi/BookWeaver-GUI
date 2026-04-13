@@ -265,8 +265,9 @@ async def update_metadata_for_files(
 
                 metadata = llm_result["metadata"]
 
-                # 作者必填校验
-                if not metadata.get("author") or not metadata["author"].strip():
+                # 作者必填校验：原书已有作者则放行，原书无作者则报错
+                existing_author = file_info.get("author") or ""
+                if not existing_author.strip():
                     error = "缺少作者"
                     update_file_metadata_status(workspace_path, file_info["filePath"], updated=False, error=error)
                     batch_results.append({
