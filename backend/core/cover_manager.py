@@ -6,6 +6,7 @@ import os
 import re
 import asyncio
 import base64
+import time
 from datetime import datetime
 from typing import Optional, Dict, Any, List, Tuple
 
@@ -15,6 +16,17 @@ from ebooklib import epub, ITEM_IMAGE, ITEM_COVER
 from .epub_meta import (
     INDEX_FILE, load_index, save_index, get_or_build_index, _extract_cover_image
 )
+
+# ==================== 全局速率限制 ====================
+# Google Books API 免费配额有限制，需控制请求频率
+_rate_limit_lock = asyncio.Lock()
+_last_google_request = 0.0
+_google_request_interval = 1.5  # 秒，Google Books API 请求间隔
+
+# Open Library 速率限制
+_ol_rate_limit_lock = asyncio.Lock()
+_last_ol_request = 0.0
+_ol_request_interval = 0.5  # 秒，OpenLibrary 请求间隔
 
 # ==================== 取消标志 ====================
 
@@ -59,6 +71,8 @@ async def search_google_books(
 
     返回最大可用尺寸的封面 URL，或 None。
     """
+    global _last_google_request
+
     clean = clean_title(title)
     if not clean:
         return None
@@ -72,12 +86,23 @@ async def search_google_books(
 
     q = "+".join(q_parts)
 
+    # 全局限速：确保请求间隔大于限制
+    async with _rate_limit_lock:
+        now = time.monotonic()
+        elapsed = now - _last_google_request
+        if elapsed < _google_request_interval:
+            await asyncio.sleep(_google_request_interval - elapsed)
+        _last_google_request = time.monotonic()
+
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
             resp = await client.get(
                 "https://www.googleapis.com/books/v1/volumes",
                 params={"q": q, "maxResults": 3},
             )
+            if resp.status_code == 429:
+                print(f"[Cover] Google Books 触发速率限制 (429)，切换到 OpenLibrary")
+                return None  # 立即切换到 OpenLibrary
             if resp.status_code != 200:
                 print(f"[Cover] Google Books HTTP {resp.status_code} for '{clean}'")
                 return None
@@ -110,9 +135,19 @@ async def search_openlibrary(
     title: str, author: str, timeout: float = 15
 ) -> Optional[str]:
     """从 Open Library 搜索封面 URL（兜底方案）."""
+    global _last_ol_request
+
     clean = clean_title(title)
     if not clean:
         return None
+
+    # 全局限速
+    async with _ol_rate_limit_lock:
+        now = time.monotonic()
+        elapsed = now - _last_ol_request
+        if elapsed < _ol_request_interval:
+            await asyncio.sleep(_ol_request_interval - elapsed)
+        _last_ol_request = time.monotonic()
 
     try:
         q = clean
@@ -127,6 +162,7 @@ async def search_openlibrary(
                 params={"q": q, "limit": 3, "fields": "cover_i,edition_key"},
             )
             if resp.status_code != 200:
+                print(f"[Cover] Open Library HTTP {resp.status_code} for '{clean}'")
                 return None
 
             data = resp.json()
@@ -277,8 +313,8 @@ def replace_epub_cover(epub_path: str, cover_image_path: str) -> Tuple[bool, str
                 if changed:
                     item.set_content(content.encode('utf-8'))
 
-        # 写回 EPUB
-        epub.write_epub(epub_path, book, {})
+        # 写回 EPUB（使用 UTF-8 编码支持多语言）
+        epub.write_epub(epub_path, book, {"encoding": "utf-8"})
         return True, ""
 
     except Exception as e:

@@ -81,8 +81,8 @@ def update_epub_metadata(file_path: str, metadata: dict) -> tuple:
         # 更新出版年份 (DC:date) - 只写年份
         book.add_metadata('DC', 'date', str(metadata['publishYear']))
 
-        # 保存 EPUB
-        epub.write_epub(file_path, book, {})
+        # 保存 EPUB（使用 UTF-8 编码支持多语言）
+        epub.write_epub(file_path, book, {"encoding": "utf-8"})
 
         return True, None
 
