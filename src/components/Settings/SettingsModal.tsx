@@ -145,6 +145,10 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
             ...DEFAULT_CONFIG.download,
             ...config.download
           },
+          metadata: {
+            ...DEFAULT_CONFIG.metadata,
+            ...config.metadata
+          },
           debugMode: config.debugMode ?? false
         })
       } else {
@@ -153,6 +157,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
         form.setFieldsValue({
           llm: PRESET_MODELS[0],
           download: DEFAULT_CONFIG.download,
+          metadata: DEFAULT_CONFIG.metadata,
           debugMode: false
         })
       }
@@ -160,7 +165,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       console.error('加载配置失败:', error)
       setLlmMode('preset')
       setSelectedPreset(PRESET_MODELS[0].id)
-      form.setFieldsValue({ llm: PRESET_MODELS[0], download: DEFAULT_CONFIG.download, debugMode: false })
+      form.setFieldsValue({ llm: PRESET_MODELS[0], download: DEFAULT_CONFIG.download, metadata: DEFAULT_CONFIG.metadata, debugMode: false })
     }
   }
 
