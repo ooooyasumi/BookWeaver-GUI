@@ -81,4 +81,5 @@ export interface DownloadConfig {
 
 export interface MetadataConfig {
   batchSize: number  // 每批处理的书本数量 (5-15)
+  maxConcurrentBatches: number  // 最大并发批次数 (1-5)
 }

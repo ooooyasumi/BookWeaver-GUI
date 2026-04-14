@@ -16,7 +16,7 @@ from .epub_meta import INDEX_FILE, load_index, save_index
 
 # 批量处理的最大书籍数量（可运行时调整）
 BATCH_SIZE = 5
-# 并发控制
+# 并发控制（可运行时调整）
 MAX_CONCURRENT_BATCHES = 2
 
 # 取消标志
@@ -27,6 +27,12 @@ def set_batch_size(size: int):
     """设置每批处理的书籍数量 (5-15)"""
     global BATCH_SIZE
     BATCH_SIZE = max(5, min(15, size))
+
+
+def set_max_concurrent_batches(size: int):
+    """设置最大并发批次数 (1-5)"""
+    global MAX_CONCURRENT_BATCHES
+    MAX_CONCURRENT_BATCHES = max(1, min(5, size))
 
 
 def set_cancel_flag(value: bool = True):

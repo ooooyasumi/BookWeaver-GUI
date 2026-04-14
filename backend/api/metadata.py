@@ -20,6 +20,7 @@ from core.metadata_updater import (
     set_cancel_flag,
     reset_cancel_flag,
     set_batch_size,
+    set_max_concurrent_batches,
 )
 
 router = APIRouter()
@@ -36,6 +37,7 @@ class UpdateRequest(BaseModel):
     files: list[FileInfo]
     config: dict
     batchSize: Optional[int] = None  # 可选，覆盖默认 BATCH_SIZE
+    maxConcurrentBatches: Optional[int] = None  # 可选，覆盖默认 MAX_CONCURRENT_BATCHES
 
 
 @router.post("/batch-size")
@@ -45,6 +47,15 @@ async def set_batch_size_endpoint(batchSize: int):
         raise HTTPException(status_code=400, detail="batchSize 必须在 5-15 之间")
     set_batch_size(batchSize)
     return {"success": True, "batchSize": batchSize}
+
+
+@router.post("/max-concurrent-batches")
+async def set_max_concurrent_batches_endpoint(maxConcurrentBatches: int):
+    """设置最大并发批次数 (1-5)"""
+    if maxConcurrentBatches < 1 or maxConcurrentBatches > 5:
+        raise HTTPException(status_code=400, detail="maxConcurrentBatches 必须在 1-5 之间")
+    set_max_concurrent_batches(maxConcurrentBatches)
+    return {"success": True, "maxConcurrentBatches": maxConcurrentBatches}
 
 
 @router.get("/status")
@@ -86,6 +97,8 @@ async def update_metadata(request: UpdateRequest):
             # 应用自定义 batchSize（如果提供）
             if request.batchSize is not None:
                 set_batch_size(request.batchSize)
+            if request.maxConcurrentBatches is not None:
+                set_max_concurrent_batches(request.maxConcurrentBatches)
 
             try:
                 result = await update_metadata_for_files(

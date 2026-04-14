@@ -205,6 +205,7 @@ export function MetadataPage() {
 
     const config = await window.electronAPI.getConfig()
     const batchSize = config?.metadata?.batchSize
+    const maxConcurrentBatches = config?.metadata?.maxConcurrentBatches
 
     // 开始前清空上次的增量结果
     setProcessedBatch([])
@@ -227,6 +228,9 @@ export function MetadataPage() {
       }
       if (batchSize) {
         payload.batchSize = batchSize
+      }
+      if (maxConcurrentBatches) {
+        payload.maxConcurrentBatches = maxConcurrentBatches
       }
       const response = await fetch(`${API_BASE}/metadata/update`, {
         method: 'POST',

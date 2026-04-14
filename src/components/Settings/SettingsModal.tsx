@@ -28,6 +28,7 @@ interface Config {
   download: DownloadConfig
   metadata?: {
     batchSize?: number
+    maxConcurrentBatches?: number
   }
   debugMode?: boolean
 }
@@ -84,7 +85,8 @@ const DEFAULT_CONFIG: Config = {
     timeout: 30
   },
   metadata: {
-    batchSize: 5
+    batchSize: 5,
+    maxConcurrentBatches: 2
   },
   debugMode: false
 }
@@ -476,6 +478,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               <Col span={12}>
                 <Form.Item name={['metadata', 'batchSize']} label="每批处理数量" tooltip="每批发送给 LLM 的书本数量 (5-15)" style={{ marginBottom: 0 }}>
                   <InputNumber min={5} max={15} style={{ width: '100%' }} size="large" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item name={['metadata', 'maxConcurrentBatches']} label="并发批次数" tooltip="同时处理的批次数 (1-5)" style={{ marginBottom: 0 }}>
+                  <InputNumber min={1} max={5} style={{ width: '100%' }} size="large" />
                 </Form.Item>
               </Col>
             </Row>
