@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Card, Button, Space, Checkbox, message, Spin, Tag, Typography, Select, Tooltip } from 'antd'
+import { Card, Button, Space, Checkbox, message, Spin, Tag, Typography, Tooltip, Select } from 'antd'
 import {
   CloudUploadOutlined, CheckCircleOutlined,
   FileTextOutlined, ExclamationCircleOutlined, CloseCircleOutlined,
@@ -9,6 +9,7 @@ import { BookDetailDrawer, formatFileSize, BookInfo } from '../Common/BookDetail
 import { TaskProgressCard } from '../Common/TaskProgressCard'
 import { BookStatusIcons } from '../Common/BookStatusIcons'
 import { BookFilter, FilterKey, matchesFilter, BookWithAllStatus } from '../Common/BookFilter'
+import { PaginationBar } from '../Common/PaginationBar'
 
 const { Text } = Typography
 
@@ -157,6 +158,10 @@ export function UploadPage() {
   // 筛选
   const [filters, setFilters] = useState<Set<FilterKey>>(new Set())
 
+  // 分页状态
+  const [pageOffset, setPageOffset] = useState(0)
+  const [pageLimit, setPageLimit] = useState(50)
+
   // 合并所有书籍到一个列表，标记状态
   const allBooks = useMemo(() => {
     if (!status) return []
@@ -180,6 +185,12 @@ export function UploadPage() {
   const filteredBooks = useMemo(
     () => allBooks.filter(b => matchesFilter(b as BookWithAllStatus, filters)),
     [allBooks, filters]
+  )
+
+  // 分页后的书籍
+  const paginatedBooks = useMemo(
+    () => pageLimit === 0 ? filteredBooks : filteredBooks.slice(pageOffset, pageOffset + pageLimit),
+    [filteredBooks, pageOffset, pageLimit]
   )
 
   // 是否正在运行上传任务
@@ -444,7 +455,7 @@ export function UploadPage() {
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         styles={{ body: { flex: 1, overflow: 'auto', padding: '12px 16px' } }}
       >
-        {filteredBooks.map((item, i) => {
+        {paginatedBooks.map((item, i) => {
           let statusTag: React.ReactNode = null
           if (item._status === 'failed') {
             statusTag = (
@@ -482,6 +493,17 @@ export function UploadPage() {
             <div>{filters.size > 0 ? '没有符合筛选条件的书籍' : '工作区内没有 EPUB 文件'}</div>
           </div>
         )}
+
+        <PaginationBar
+          total={filteredBooks.length}
+          pageOffset={pageOffset}
+          pageLimit={pageLimit}
+          onPageChange={(offset) => setPageOffset(offset)}
+          onPageSizeChange={(limit) => {
+            setPageLimit(limit)
+            setPageOffset(0)
+          }}
+        />
       </Card>
 
       {/* 详情抽屉 */}

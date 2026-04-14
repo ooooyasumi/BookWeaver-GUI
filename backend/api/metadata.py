@@ -59,10 +59,35 @@ async def set_max_concurrent_batches_endpoint(maxConcurrentBatches: int):
 
 
 @router.get("/status")
-async def get_status(workspacePath: str):
-    """获取元数据管理状态"""
+async def get_status(
+    workspacePath: str,
+    offset: int = 0,
+    limit: int = 0,
+    filter_updated: Optional[str] = None,  # "all"|"updated"|"notUpdated"
+):
+    """获取元数据管理状态，支持分页.
+
+    - offset: 跳过前 N 条
+    - limit: 最多返回 N 条，0=不限制
+    - filter_updated: "all"|"updated"|"notUpdated"，默认 "all"
+    """
     try:
-        status = get_metadata_status(workspacePath)
+        # 转换 filter_updated 字符串为布尔值
+        filter_map = {
+            "all": None,
+            "updated": True,
+            "notUpdated": False,
+            "": None,
+            None: None,
+        }
+        filter_bool = filter_map.get(filter_updated)
+
+        status = get_metadata_status(
+            workspacePath,
+            offset=offset,
+            limit=limit,
+            filter_updated=filter_bool,
+        )
         return status
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

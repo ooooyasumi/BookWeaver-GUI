@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { Tabs, Button, Progress, Space, message, Card, Typography, Empty, Tag, Collapse, List } from 'antd'
 import {
   PlayCircleOutlined, PauseCircleOutlined, CloseCircleOutlined,
@@ -7,6 +7,7 @@ import {
 import {
   useWorkspace, PendingBook, BatchSummary, BatchMeta, DownloadResult, ActiveDownload
 } from '../../contexts/WorkspaceContext'
+import { PaginationBar } from '../Common/PaginationBar'
 
 const { Text } = Typography
 
@@ -55,6 +56,30 @@ export function DownloadPage() {
 
   const pendingBooks = appState?.pending ?? []
   const batches = appState?.batches ?? []
+
+  // 分页状态
+  const [pendingPage, setPendingPage] = useState(0)
+  const [pendingPageSize, setPendingPageSize] = useState(50)
+  const [resultsPage, setResultsPage] = useState(0)
+  const [resultsPageSize, setResultsPageSize] = useState(50)
+
+  // pendingBooks 分页
+  const paginatedPendingBooks = useMemo(() => {
+    if (pendingPageSize === 0) return pendingBooks
+    const start = pendingPage * pendingPageSize
+    return pendingBooks.slice(start, start + pendingPageSize)
+  }, [pendingBooks, pendingPage, pendingPageSize])
+
+  // results 分页（避免每次 .reverse()）
+  const reversedResults = useMemo(() => {
+    return [...(activeDownload?.results ?? [])].reverse()
+  }, [activeDownload?.results])
+
+  const paginatedResults = useMemo(() => {
+    if (resultsPageSize === 0) return reversedResults
+    const start = resultsPage * resultsPageSize
+    return reversedResults.slice(start, start + resultsPageSize)
+  }, [reversedResults, resultsPage, resultsPageSize])
 
   // ── 开始下载 ────────────────────────────────────────────────────────────
 
@@ -341,33 +366,45 @@ export function DownloadPage() {
           <Empty description="暂无待下载书籍" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         </div>
       ) : (
-        <List
-          dataSource={pendingBooks}
-          renderItem={(book) => (
-            <div
-              className="book-item"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '14px 20px', marginBottom: 10
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{book.title}</div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{book.author}</div>
+        <>
+          <List
+            dataSource={paginatedPendingBooks}
+            renderItem={(book) => (
+              <div
+                className="book-item"
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '14px 20px', marginBottom: 10
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 500, fontSize: 15, color: 'var(--text-primary)', marginBottom: 2 }}>{book.title}</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{book.author}</div>
+                </div>
+                <Space>
+                  <Tag color={book.language === 'en' ? 'blue' : 'green'}>{book.language}</Tag>
+                  <Button
+                    size="small"
+                    danger
+                    onClick={() => removeFromPending([book.id])}
+                  >
+                    移除
+                  </Button>
+                </Space>
               </div>
-              <Space>
-                <Tag color={book.language === 'en' ? 'blue' : 'green'}>{book.language}</Tag>
-                <Button
-                  size="small"
-                  danger
-                  onClick={() => removeFromPending([book.id])}
-                >
-                  移除
-                </Button>
-              </Space>
-            </div>
-          )}
-        />
+            )}
+          />
+          <PaginationBar
+            total={pendingBooks.length}
+            pageOffset={pendingPage * (pendingPageSize || pendingBooks.length)}
+            pageLimit={pendingPageSize}
+            onPageChange={(offset) => setPendingPage(pendingPageSize === 0 ? 0 : Math.floor(offset / pendingPageSize))}
+            onPageSizeChange={(limit) => {
+              setPendingPageSize(limit)
+              setPendingPage(0)
+            }}
+          />
+        </>
       )}
     </div>
   )
@@ -447,9 +484,10 @@ export function DownloadPage() {
 
         {/* 已完成结果 */}
         {results.length > 0 && (
-          <List
-            dataSource={[...results].reverse()}
-            renderItem={(result) => (
+          <>
+            <List
+              dataSource={paginatedResults}
+              renderItem={(result) => (
               <div
                 style={{
                   display: 'flex', alignItems: 'center', padding: '12px 20px',
@@ -471,7 +509,18 @@ export function DownloadPage() {
                 </div>
               </div>
             )}
-          />
+            />
+            <PaginationBar
+              total={results.length}
+              pageOffset={resultsPage * (resultsPageSize || results.length)}
+              pageLimit={resultsPageSize}
+              onPageChange={(offset) => setResultsPage(resultsPageSize === 0 ? 0 : Math.floor(offset / resultsPageSize))}
+              onPageSizeChange={(limit) => {
+                setResultsPageSize(limit)
+                setResultsPage(0)
+              }}
+            />
+          </>
         )}
       </div>
     )

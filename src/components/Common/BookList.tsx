@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
-import { List, Checkbox, Progress, Tag, Empty, Pagination } from 'antd'
+import { List, Checkbox, Progress, Tag, Empty } from 'antd'
 import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
+import { PaginationBar } from './PaginationBar'
 
 interface BookItem {
   id: number
@@ -41,8 +42,8 @@ export function BookList({
   emptyDescription = '暂无数据'
 }: BookListProps) {
   // 分页状态
-  const [currentPage, setCurrentPage] = useState(1)
-  const pageSize = 10
+  const [pageOffset, setPageOffset] = useState(0)
+  const [pageLimit, setPageLimit] = useState(50)
 
   const dataLength = (data as BookItem[]).length
 
@@ -51,10 +52,11 @@ export function BookList({
     if (type === 'completed') {
       return data as DownloadResult[]
     }
-    const start = (currentPage - 1) * pageSize
-    const end = start + pageSize
-    return (data as BookItem[]).slice(start, end)
-  }, [data, currentPage, pageSize, type])
+    if (pageLimit === 0) {
+      return data as BookItem[]
+    }
+    return (data as BookItem[]).slice(pageOffset, pageOffset + pageLimit)
+  }, [data, pageOffset, pageLimit, type])
 
   // 渲染搜索/下载列表
   const renderBookItem = (book: BookItem) => {
@@ -196,20 +198,16 @@ export function BookList({
       />
 
       {/* 分页器 - 仅搜索和下载列表显示 */}
-      {type !== 'completed' && dataLength > pageSize && (
-        <Pagination
-          current={currentPage}
+      {type !== 'completed' && dataLength > 0 && (
+        <PaginationBar
           total={dataLength}
-          pageSize={pageSize}
-          onChange={setCurrentPage}
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            marginTop: 24,
-            paddingTop: 16,
-            borderTop: '1px solid var(--border-light)'
+          pageOffset={pageOffset}
+          pageLimit={pageLimit}
+          onPageChange={(offset) => setPageOffset(offset)}
+          onPageSizeChange={(limit) => {
+            setPageLimit(limit)
+            setPageOffset(0)
           }}
-          showTotal={(total) => `共 ${total} 条`}
         />
       )}
     </div>

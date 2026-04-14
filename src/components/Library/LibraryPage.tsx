@@ -13,6 +13,7 @@ import {
 import { BookDetailDrawer, formatFileSize, BookInfo } from '../Common/BookDetailDrawer'
 import { BookStatusIcons } from '../Common/BookStatusIcons'
 import { BookFilter, FilterKey, matchesFilter } from '../Common/BookFilter'
+import { PaginationBar } from '../Common/PaginationBar'
 
 const { Text } = Typography
 
@@ -120,10 +121,20 @@ export function LibraryPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
 
+  // 分页状态（仅 all 视图使用）
+  const [pageOffset, setPageOffset] = useState(0)
+  const [pageLimit, setPageLimit] = useState(50)
+
   // 筛选后的书籍列表
   const filteredBooks = useMemo(
     () => allBooks.filter(b => matchesFilter(b, filters)),
     [allBooks, filters]
+  )
+
+  // 分页后的书籍（仅 all 视图使用）
+  const paginatedBooks = useMemo(
+    () => pageLimit === 0 ? filteredBooks : filteredBooks.slice(pageOffset, pageOffset + pageLimit),
+    [filteredBooks, pageOffset, pageLimit]
   )
 
   // ── 加载数据 ────────────────────────────────────────────────────────────
@@ -190,9 +201,10 @@ export function LibraryPage() {
     loadCurrentView()
   }, [loadCurrentView])
 
-  // 切换视图/筛选时清空选中
+  // 切换视图/筛选时清空选中并重置分页
   useEffect(() => {
     setSelected(new Set())
+    setPageOffset(0)
   }, [viewMode, filters])
 
   // ── 刷新/重建索引 ─────────────────────────────────────────────────────
@@ -295,7 +307,7 @@ export function LibraryPage() {
 
     return (
       <div>
-        {filteredBooks.map((book, i) => (
+        {paginatedBooks.map((book, i) => (
           <BookItem
             key={book.filePath || i}
             book={book}
@@ -305,6 +317,16 @@ export function LibraryPage() {
             onCheck={() => toggleSelection(book.filePath)}
           />
         ))}
+        <PaginationBar
+          total={filteredBooks.length}
+          pageOffset={pageOffset}
+          pageLimit={pageLimit}
+          onPageChange={(offset) => setPageOffset(offset)}
+          onPageSizeChange={(limit) => {
+            setPageLimit(limit)
+            setPageOffset(0)
+          }}
+        />
       </div>
     )
   }

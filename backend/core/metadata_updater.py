@@ -134,8 +134,20 @@ def update_file_metadata_status(
     save_index(workspace_path, index_data)
 
 
-def get_metadata_status(workspace_path: str) -> dict:
-    """获取元数据管理状态"""
+def get_metadata_status(
+    workspace_path: str,
+    offset: int = 0,
+    limit: int = 0,
+    filter_updated: Optional[bool] = None,
+) -> dict:
+    """获取元数据管理状态，支持分页和筛选.
+
+    Args:
+        workspace_path: 工作区路径
+        offset: 跳过前 N 条
+        limit: 最多返回 N 条，0=不限制
+        filter_updated: True=只返回已更新，False=只返回未更新，None=全部
+    """
     index_data = load_index(workspace_path)
     if not index_data:
         index_data = {"files": {}, "version": "1.0"}
@@ -178,12 +190,28 @@ def get_metadata_status(workspace_path: str) -> dict:
         else:
             not_updated_files.append(file_data)
 
+    # 根据 filter_updated 筛选
+    if filter_updated is True:
+        filtered = updated_files
+    elif filter_updated is False:
+        filtered = not_updated_files
+    else:
+        filtered = updated_files + not_updated_files
+
+    # 应用分页
+    paginated = filtered[offset:offset + limit] if limit > 0 else filtered
+
     return {
         "total": total,
         "notUpdated": len(not_updated_files),
         "updated": len(updated_files),
         "notUpdatedFiles": not_updated_files,
-        "updatedFiles": updated_files
+        "updatedFiles": updated_files,
+        # 分页信息
+        "offset": offset,
+        "limit": limit,
+        "filteredTotal": len(filtered),
+        "books": paginated,
     }
 
 

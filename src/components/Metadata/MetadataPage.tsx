@@ -6,6 +6,7 @@ import { BookDetailDrawer, formatFileSize, BookInfo } from '../Common/BookDetail
 import { BookStatusIcons } from '../Common/BookStatusIcons'
 import { BookFilter, FilterKey, matchesFilter, BookWithAllStatus } from '../Common/BookFilter'
 import { TaskProgressCard } from '../Common/TaskProgressCard'
+import { PaginationBar } from '../Common/PaginationBar'
 
 const { Text } = Typography
 
@@ -145,6 +146,11 @@ export function MetadataPage() {
   const [detailDrawerOpen, setDetailDrawerOpen] = useState(false)
   const [selectedBook, setSelectedBook] = useState<BookInfo | null>(null)
 
+  // 分页状态
+  const [pageOffset, setPageOffset] = useState(0)
+  const [pageLimit, setPageLimit] = useState(50)
+  const [filteredTotal, setFilteredTotal] = useState(0)
+
   // 合并所有书籍（processedBatch 实时增量追加）
   const allBooks = useMemo(() => {
     if (!status) return []
@@ -153,27 +159,43 @@ export function MetadataPage() {
     return [...status.updatedFiles, ...processedBatch, ...notUpdated]
   }, [status, processedBatch])
 
-  // 筛选后的书籍
-  const filteredBooks = useMemo(
+  // 筛选后的书籍（用于全选等操作，仍基于完整列表）
+  const allFilteredBooks = useMemo(
     () => allBooks.filter(b => matchesFilter(b as BookWithAllStatus, filters)),
     [allBooks, filters]
   )
 
-  // 是否正在运行元数据任务
-  const isRunning = activeTask?.type === 'metadata' && activeTask.status === 'running'
-  const progress = activeTask?.progress
+  // 分页后的书籍
+  const paginatedBooks = useMemo(
+    () => pageLimit === 0 ? allFilteredBooks : allFilteredBooks.slice(pageOffset, pageOffset + pageLimit),
+    [allFilteredBooks, pageOffset, pageLimit]
+  )
 
-  // 加载状态
-  const loadStatus = async () => {
+  // 加载状态（分页）
+  const loadStatus = async (offset = pageOffset, limit = pageLimit) => {
     if (!workspacePath) return
 
     setLoading(true)
     try {
-      const query = new URLSearchParams({ workspacePath })
-      const response = await fetch(`${API_BASE}/metadata/status?${query}`)
+      const params = new URLSearchParams({
+        workspacePath,
+        offset: String(offset),
+        limit: String(limit),
+      })
+
+      // 添加筛选参数
+      if (filters.has('metadataUpdated')) {
+        params.set('filter_updated', 'updated')
+      } else if (filters.has('metadataNotUpdated')) {
+        params.set('filter_updated', 'notUpdated')
+      }
+
+      const response = await fetch(`${API_BASE}/metadata/status?${params}`)
       if (!response.ok) throw new Error('Failed to load status')
       const data = await response.json()
+
       setStatus(data)
+      setFilteredTotal(data.filteredTotal || data.total || 0)
     } catch (error) {
       console.error('Load status error:', error)
       message.error('加载状态失败')
@@ -182,9 +204,13 @@ export function MetadataPage() {
     }
   }
 
+  // 是否正在运行元数据任务
+  const isRunning = activeTask?.type === 'metadata' && activeTask.status === 'running'
+  const progress = activeTask?.progress
+
   useEffect(() => {
-    loadStatus()
-  }, [workspacePath])
+    loadStatus(pageOffset, pageLimit)
+  }, [workspacePath, pageOffset, pageLimit, filters])
 
   // 开始更新
   const startUpdate = async (files?: FileInfo[]) => {
@@ -193,7 +219,7 @@ export function MetadataPage() {
     let filesToUpdate: FileInfo[] = files || []
     if (!files || files.length === 0) {
       filesToUpdate = Array.from(selected).map(path => {
-        const found = allBooks.find(f => f.filePath === path)
+        const found = allFilteredBooks.find(f => f.filePath === path)
         return { filePath: path, title: found?.title || null, author: found?.author || null }
       })
     }
@@ -203,7 +229,7 @@ export function MetadataPage() {
       return
     }
 
-    const config = await window.electronAPI.getConfig()
+    const config = await window.electronAPI.getConfig() as any
     const batchSize = config?.metadata?.batchSize
     const maxConcurrentBatches = config?.metadata?.maxConcurrentBatches
 
@@ -273,7 +299,7 @@ export function MetadataPage() {
                 message.success(`更新完成: 成功 ${data.success || 0}, 失败 ${data.failed || 0}`)
                 setTimeout(() => {
                   setActiveTask(null)
-                  loadStatus()
+                  loadStatus(pageOffset, pageLimit)
                 }, 500)
               }
             } catch {
@@ -290,7 +316,7 @@ export function MetadataPage() {
         message.error('更新失败')
       }
       setActiveTask(null)
-      loadStatus()
+      loadStatus(pageOffset, pageLimit)
     }
   }
 
@@ -314,7 +340,7 @@ export function MetadataPage() {
   // 全选
   const toggleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelected(new Set(filteredBooks.map(f => f.filePath)))
+      setSelected(new Set(allFilteredBooks.map(f => f.filePath)))
     } else {
       setSelected(new Set())
     }
@@ -333,15 +359,15 @@ export function MetadataPage() {
       const query = new URLSearchParams({ workspacePath })
       await fetch(`${API_BASE}/metadata/reset-status?${query}`, { method: 'POST' })
       message.success('已重置所有元数据状态')
-      loadStatus()
+      loadStatus(pageOffset, pageLimit)
     } catch (error) {
       console.error('Reset error:', error)
       message.error('重置失败')
     }
   }
 
-  const isAllSelected = filteredBooks.length > 0 && selected.size === filteredBooks.length
-  const isIndeterminate = selected.size > 0 && selected.size < filteredBooks.length
+  const isAllSelected = allFilteredBooks.length > 0 && selected.size === allFilteredBooks.length
+  const isIndeterminate = selected.size > 0 && selected.size < allFilteredBooks.length
 
   if (loading) {
     return (
@@ -402,6 +428,7 @@ export function MetadataPage() {
           </Checkbox>
           <BookFilter filters={filters} onChange={setFilters} />
         </div>
+
       </Card>
 
       {/* 运行中进度卡片 */}
@@ -416,11 +443,11 @@ export function MetadataPage() {
       {/* 书籍列表 */}
       <Card
         className="card"
-        title={<span>全部书籍 ({filteredBooks.length})</span>}
+        title={<span>书籍列表 ({allFilteredBooks.length} 本)</span>}
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         styles={{ body: { flex: 1, overflow: 'auto', padding: '12px 16px' } }}
       >
-        {filteredBooks.map((item, i) => (
+        {paginatedBooks.map((item, i) => (
           <BookItem
             key={item.filePath || i}
             book={item}
@@ -430,11 +457,23 @@ export function MetadataPage() {
             onCheck={() => toggleSelection(item.filePath)}
           />
         ))}
-        {filteredBooks.length === 0 && (
+        {paginatedBooks.length === 0 && (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
             {filters.size > 0 ? '没有符合筛选条件的书籍' : '没有需要更新的书籍'}
           </div>
         )}
+
+        {/* 底部份页栏 */}
+        <PaginationBar
+          total={filteredTotal}
+          pageOffset={pageOffset}
+          pageLimit={pageLimit}
+          onPageChange={(offset) => setPageOffset(offset)}
+          onPageSizeChange={(limit) => {
+            setPageLimit(limit)
+            setPageOffset(0)
+          }}
+        />
       </Card>
 
       {/* 详情抽屉 */}
