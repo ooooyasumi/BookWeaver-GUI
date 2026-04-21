@@ -56,7 +56,8 @@ class ChatLogger:
         "is_search_task", "plan_generated", "plan_keywords", "plan_target_count",
         "fallback_triggered", "fallback_count", "total_search_calls",
         "books_returned", "books_added", "llm_model",
-        "plan_latency_ms", "reply_latency_ms", "total_duration_ms", "error"
+        "plan_latency_ms", "reply_latency_ms", "total_duration_ms",
+        "llm_reply_text", "error"
     ]
 
     BOOK_HEADERS = [

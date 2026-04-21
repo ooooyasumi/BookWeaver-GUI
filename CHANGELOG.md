@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-04-21
+
+### Added
+
+- **AI 对话埋点日志**：AI 对话找书功能新增数据埋点，记录搜索关键词、LLM 回复文本、延迟等核心指标到 CSV 文件
+- **AI 元数据更新埋点日志**：AI 元数据修改功能新增数据埋点，记录修改前后对比、成功率等指标
+- **数据导出功能**：设置页面新增"数据导出"区块，支持一键导出 AI 对话日志和元数据更新日志为 CSV 文件
+
+### Fixed
+
+- 修复 AI 对话埋点中 `llm_reply_text` 字段为空的问题
+- 修复旧版 CSV 表头缺少 `llm_reply_text` 列导致数据错位的问题
+
 ## [0.7.1] - 2026-04-15
 
 ### Added

@@ -346,9 +346,11 @@ async def chat(request: ChatRequest):
                     max_tokens=request.config.maxTokens,
                     stream=True
                 )
+                total_reply_text = ""
                 for chunk in chat_response:
                     if chunk.choices and chunk.choices[0].delta.content:
                         token = chunk.choices[0].delta.content
+                        total_reply_text += token
                         yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
             # ── 埋点：写入非搜索对话日志 ─────────────────────────────
@@ -374,6 +376,7 @@ async def chat(request: ChatRequest):
                         "plan_latency_ms": plan_latency_ms,
                         "reply_latency_ms": max(0, total_duration_ms - plan_latency_ms),
                         "total_duration_ms": total_duration_ms,
+                        "llm_reply_text": total_reply_text,
                         "error": error_msg
                     }
                     chat_logger.write_session(session_log)
@@ -508,9 +511,11 @@ async def chat(request: ChatRequest):
                 stream=True
             )
 
+            total_reply_text = ""
             for chunk in reply_response:
                 if chunk.choices and chunk.choices[0].delta.content:
                     token = chunk.choices[0].delta.content
+                    total_reply_text += token
                     yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
             # ── 埋点：记录 Reply 阶段延迟 ───────────────────────────────
@@ -540,6 +545,7 @@ async def chat(request: ChatRequest):
                         "plan_latency_ms": plan_latency_ms,
                         "reply_latency_ms": reply_latency_ms,
                         "total_duration_ms": total_duration_ms,
+                        "llm_reply_text": total_reply_text,
                         "error": error_msg
                     }
                     chat_logger.write_session(session_log)
@@ -574,6 +580,7 @@ async def chat(request: ChatRequest):
                         "plan_latency_ms": plan_latency_ms,
                         "reply_latency_ms": 0,
                         "total_duration_ms": total_duration_ms,
+                        "llm_reply_text": "",
                         "error": error_msg
                     }
                     chat_logger.write_session(session_log)

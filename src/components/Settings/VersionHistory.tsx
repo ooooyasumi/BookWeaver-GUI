@@ -12,10 +12,24 @@ interface VersionEntry {
   changed: string[]
 }
 
-const CURRENT_VERSION = '0.7.1'
+const CURRENT_VERSION = '0.8.0'
 
 // 内嵌的版本历史数据（与 CHANGELOG.md 保持同步）
 const VERSION_HISTORY: VersionEntry[] = [
+  {
+    version: '0.8.0',
+    date: '2026-04-21',
+    added: [
+      'AI 对话埋点日志：记录搜索关键词、LLM 回复文本、延迟等核心指标到 CSV 文件',
+      'AI 元数据更新埋点日志：记录修改前后对比、成功率等指标',
+      '数据导出功能：设置页面支持一键导出 AI 对话日志和元数据更新日志为 CSV 文件',
+    ],
+    fixed: [
+      '修复 AI 对话埋点中 llm_reply_text 字段为空的问题',
+      '修复旧版 CSV 表头缺少 llm_reply_text 列导致数据错位的问题',
+    ],
+    changed: [],
+  },
   {
     version: '0.7.1',
     date: '2026-04-15',
