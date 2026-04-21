@@ -279,6 +279,24 @@ ipcMain.handle('shell:openPath', async (_event, targetPath: string) => {
   shell.openPath(targetPath)
 })
 
+// 保存文件（唤起系统储存控件）
+ipcMain.handle('dialog:saveFile', async (_event, options: { filename: string; content: string }) => {
+  const result = await dialog.showSaveDialog({
+    title: '导出 CSV 文件',
+    defaultPath: options.filename,
+    filters: [{ name: 'CSV Files', extensions: ['csv'] }]
+  })
+  if (result.canceled || !result.filePath) return false
+
+  try {
+    fs.writeFileSync(result.filePath, options.content, 'utf-8')
+    return true
+  } catch (err) {
+    console.error('保存文件失败:', err)
+    return false
+  }
+})
+
 // ─── App lifecycle ───────────────────────────────────────────────────────────
 
 app.whenReady().then(async () => {

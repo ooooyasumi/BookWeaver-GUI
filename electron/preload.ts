@@ -19,5 +19,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveConfig: (config: unknown) => ipcRenderer.invoke('config:save', config),
 
   // Shell
-  openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path)
+  openPath: (path: string) => ipcRenderer.invoke('shell:openPath', path),
+
+  // 保存文件（唤起系统储存控件）
+  saveFile: (options: { filename: string; content: string }) =>
+    ipcRenderer.invoke('dialog:saveFile', options)
 })

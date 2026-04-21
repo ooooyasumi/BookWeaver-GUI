@@ -15,6 +15,7 @@ declare global {
       getConfig: () => Promise<Config>
       saveConfig: (config: Config) => Promise<boolean>
       openPath: (path: string) => Promise<void>
+      saveFile: (options: { filename: string; content: string }) => Promise<boolean>
     }
   }
 }

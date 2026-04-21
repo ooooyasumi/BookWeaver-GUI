@@ -89,7 +89,8 @@ export function SearchPage() {
     clearSearchResults,
     toggleSearchResultSelection,
     selectAllSearchResults,
-    clearSearchResultSelection
+    clearSearchResultSelection,
+    workspacePath
   } = useWorkspace()
 
   // 搜索相关状态
@@ -309,7 +310,8 @@ export function SearchPage() {
         body: JSON.stringify({
           message: aiInput,
           history: aiMessages,
-          config: config.llm
+          config: config.llm,
+          workspacePath
         })
       })
 

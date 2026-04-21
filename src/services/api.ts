@@ -449,3 +449,91 @@ export async function reindexLibrary(workspacePath: string): Promise<{
     throw err
   }
 }
+
+// ─── 日志导出 API ─────────────────────────────────────────────────────────────
+
+export interface LogsInfo {
+  chat: {
+    total_records: number
+    date_from: string | null
+    date_to: string | null
+    files_count: number
+    total_size_mb: number
+  }
+  metadata: {
+    total_records: number
+    date_from: string | null
+    date_to: string | null
+    files_count: number
+    total_size_mb: number
+  }
+}
+
+export async function getLogsInfo(workspacePath: string): Promise<LogsInfo> {
+  const query = new URLSearchParams({ workspacePath })
+  const url = `${API_BASE}/logs/info?${query}`
+  debugLog('获取日志信息:', url)
+
+  try {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw await handleApiError(response, url, '获取日志信息')
+    }
+    return response.json()
+  } catch (err) {
+    if (err instanceof TypeError && err.message.includes('fetch')) {
+      throw new Error(`获取日志信息失败：无法连接到后端服务器\nURL: ${url}\nAPI_BASE: ${API_BASE}`)
+    }
+    throw err
+  }
+}
+
+export async function exportChatLogs(
+  workspacePath: string,
+  dateFrom?: string,
+  dateTo?: string
+): Promise<void> {
+  const query = new URLSearchParams({ workspacePath })
+  if (dateFrom) query.set('date_from', dateFrom)
+  if (dateTo) query.set('date_to', dateTo)
+  const url = `${API_BASE}/logs/export/chat?${query}`
+  debugLog('导出对话日志:', url)
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`导出对话日志失败：${response.status} ${text}`)
+  }
+
+  const content = await response.text()
+  const filename = `bookweaver_chat_logs${dateFrom || dateTo ? `_from_${dateFrom || 'start'}_to_${dateTo || 'end'}` : ''}.csv`
+  const saved = await window.electronAPI.saveFile({ filename, content })
+  if (!saved) {
+    throw new Error('用户取消或保存失败')
+  }
+}
+
+export async function exportMetadataLogs(
+  workspacePath: string,
+  dateFrom?: string,
+  dateTo?: string
+): Promise<void> {
+  const query = new URLSearchParams({ workspacePath })
+  if (dateFrom) query.set('date_from', dateFrom)
+  if (dateTo) query.set('date_to', dateTo)
+  const url = `${API_BASE}/logs/export/metadata?${query}`
+  debugLog('导出元数据日志:', url)
+
+  const response = await fetch(url)
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`导出元数据日志失败：${response.status} ${text}`)
+  }
+
+  const content = await response.text()
+  const filename = `bookweaver_metadata_logs${dateFrom || dateTo ? `_from_${dateFrom || 'start'}_to_${dateTo || 'end'}` : ''}.csv`
+  const saved = await window.electronAPI.saveFile({ filename, content })
+  if (!saved) {
+    throw new Error('用户取消或保存失败')
+  }
+}

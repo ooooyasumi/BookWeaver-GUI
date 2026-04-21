@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Modal, Form, Input, AutoComplete, InputNumber, Button, Space, Divider, message, Tag, Switch, Row, Col, Segmented, Select } from 'antd'
+import { Modal, Form, Input, AutoComplete, InputNumber, Button, Space, Divider, message, Tag, Switch, Row, Col, Segmented, Select, Card } from 'antd'
 import { SettingOutlined, SaveOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, MoonOutlined, LockOutlined, EditOutlined, BugOutlined } from '@ant-design/icons'
 import { useTheme } from '../../contexts/ThemeContext'
 import { useWorkspace } from '../../contexts/WorkspaceContext'
 import { VersionLink } from './VersionHistory'
+import { getLogsInfo, exportChatLogs, exportMetadataLogs, LogsInfo } from '../../services/api'
 
 interface SettingsModalProps {
   open: boolean
@@ -109,8 +110,11 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   const [testStatus, setTestStatus] = useState<'idle' | 'success' | 'error'>('idle')
   const [llmMode, setLlmMode] = useState<'preset' | 'custom'>('preset')
   const [selectedPreset, setSelectedPreset] = useState<string>('minimax')
+  const [logsInfo, setLogsInfo] = useState<LogsInfo | null>(null)
+  const [exportingChat, setExportingChat] = useState(false)
+  const [exportingMetadata, setExportingMetadata] = useState(false)
   const { toggleTheme, isDark } = useTheme()
-  const { setDebugMode } = useWorkspace()
+  const { setDebugMode, workspacePath } = useWorkspace()
 
   const apiKey = Form.useWatch(['llm', 'apiKey'], form)
   const baseUrl = Form.useWatch(['llm', 'baseUrl'], form)
@@ -128,6 +132,7 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
   useEffect(() => {
     if (open) {
       loadConfig()
+      loadLogsInfo()
     }
   }, [open])
 
@@ -182,6 +187,42 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
       setLlmMode('preset')
       setSelectedPreset(PRESET_MODELS[0].id)
       form.setFieldsValue({ llm: PRESET_MODELS[0], download: DEFAULT_CONFIG.download, upload: DEFAULT_CONFIG.upload, metadata: DEFAULT_CONFIG.metadata, debugMode: false })
+    }
+  }
+
+  const loadLogsInfo = async () => {
+    if (!workspacePath) return
+    try {
+      const info = await getLogsInfo(workspacePath)
+      setLogsInfo(info)
+    } catch (err) {
+      console.error('加载日志信息失败:', err)
+    }
+  }
+
+  const handleExportChat = async () => {
+    if (!workspacePath) return
+    setExportingChat(true)
+    try {
+      await exportChatLogs(workspacePath)
+      message.success('对话日志导出成功')
+    } catch (err: any) {
+      message.error(err.message || '导出失败')
+    } finally {
+      setExportingChat(false)
+    }
+  }
+
+  const handleExportMetadata = async () => {
+    if (!workspacePath) return
+    setExportingMetadata(true)
+    try {
+      await exportMetadataLogs(workspacePath)
+      message.success('元数据日志导出成功')
+    } catch (err: any) {
+      message.error(err.message || '导出失败')
+    } finally {
+      setExportingMetadata(false)
     }
   }
 
@@ -556,6 +597,58 @@ export function SettingsModal({ open, onClose }: SettingsModalProps) {
               </Col>
             </Row>
           </Form>
+        </div>
+
+        <Divider style={{ margin: '16px 0 20px' }} />
+
+        {/* 数据导出 */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            数据导出
+          </div>
+
+          {logsInfo ? (
+            <Row gutter={12} style={{ marginBottom: 16 }}>
+              <Col span={12}>
+                <Card size="small" title="AI 对话记录" styles={{ body: { padding: '12px' } }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                    <div>共 <strong>{logsInfo.chat.total_records}</strong> 条对话</div>
+                    <div>日期范围：{logsInfo.chat.date_from || '无'} ~ {logsInfo.chat.date_to || '无'}</div>
+                    <div>文件数：{logsInfo.chat.files_count}，大小：{logsInfo.chat.total_size_mb} MB</div>
+                  </div>
+                  <Button
+                    size="small"
+                    onClick={handleExportChat}
+                    loading={exportingChat}
+                    disabled={logsInfo.chat.total_records === 0}
+                  >
+                    导出 CSV
+                  </Button>
+                </Card>
+              </Col>
+              <Col span={12}>
+                <Card size="small" title="AI 元数据记录" styles={{ body: { padding: '12px' } }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                    <div>共 <strong>{logsInfo.metadata.total_records}</strong> 条更新</div>
+                    <div>日期范围：{logsInfo.metadata.date_from || '无'} ~ {logsInfo.metadata.date_to || '无'}</div>
+                    <div>文件数：{logsInfo.metadata.files_count}，大小：{logsInfo.metadata.total_size_mb} MB</div>
+                  </div>
+                  <Button
+                    size="small"
+                    onClick={handleExportMetadata}
+                    loading={exportingMetadata}
+                    disabled={logsInfo.metadata.total_records === 0}
+                  >
+                    导出 CSV
+                  </Button>
+                </Card>
+              </Col>
+            </Row>
+          ) : (
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              {!workspacePath ? '请先打开工作区' : '加载中...'}
+            </div>
+          )}
         </div>
       </div>
 

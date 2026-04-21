@@ -7,8 +7,15 @@ from typing import List, Optional, Dict, Any
 import json
 import re as _re
 import httpx
+import uuid
+from datetime import datetime
 
 from openai import OpenAI
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from core.ai_logger import ChatLogger
 
 router = APIRouter()
 
@@ -225,10 +232,52 @@ async def chat(request: ChatRequest):
 
     client = make_client(request.config)
 
+    # 初始化埋点 logger（如果提供了工作区路径）
+    chat_logger: Optional[ChatLogger] = None
+    if request.workspacePath:
+        try:
+            chat_logger = ChatLogger(request.workspacePath)
+        except Exception:
+            pass
+
     async def generate():
         # 后端维护列表状态（去重用）
         list_state: List[dict] = []
         list_id_set: set = set()
+
+        # ── 埋点统计变量 ────────────────────────────────────────────────
+        log_id = uuid.uuid4().hex
+        session_id = log_id
+        start_time = datetime.now()
+        is_search_task = False
+        plan_generated = False
+        plan_keywords: List[str] = []
+        plan_target_count = 0
+        fallback_triggered = False
+        fallback_count = 0
+        total_search_calls = 0
+        books_returned = 0
+        books_added = 0
+        plan_latency_ms = 0
+        reply_latency_ms = 0
+        error_msg = ""
+        query_language = "en"  # 默认英语
+
+        # 书籍详情列表（用于写入 chat_books.csv）
+        books_log: List[Dict[str, Any]] = []
+        book_rank_counter = 0
+
+        # 检测查询语言（简单实现：检查是否包含非ASCII中英文）
+        def detect_language(text: str) -> str:
+            if any('\u4e00' <= c <= '\u9fff' for c in text):
+                return "zh"
+            if any('\u3040' <= c <= '\u309f' or '\u30a0' <= c <= '\u30ff' for c in text):
+                return "ja"
+            if any('\uac00' <= c <= '\ud7af' for c in text):
+                return "ko"
+            if any('\u0400' <= c <= '\u04ff' for c in text):
+                return "ru"
+            return "en"
 
         def add_to_list(books: List[dict]) -> List[dict]:
             """去重追加，返回实际新增的书籍."""
@@ -277,6 +326,13 @@ async def chat(request: ChatRequest):
                 # JSON 解析失败 → 当作普通对话处理
                 plan = {"type": "chat"}
 
+            # ── 埋点：记录规划结果 ─────────────────────────────────────────
+            is_search_task = plan.get("type") == "search_task"
+            if is_search_task:
+                plan_generated = True
+                plan_keywords = plan.get("keywords", [])
+                plan_target_count = int(plan.get("target_count", 0))
+
             # ── 普通对话（不需要搜书）──────────────────────────────────────
             if plan.get("type") != "search_task":
                 chat_messages = [
@@ -294,6 +350,37 @@ async def chat(request: ChatRequest):
                     if chunk.choices and chunk.choices[0].delta.content:
                         token = chunk.choices[0].delta.content
                         yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+
+            # ── 埋点：写入非搜索对话日志 ─────────────────────────────
+            total_duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            if chat_logger:
+                try:
+                    session_log = {
+                        "log_id": log_id,
+                        "session_id": session_id,
+                        "timestamp": start_time.isoformat(),
+                        "user_query": request.message,
+                        "query_language": query_language,
+                        "is_search_task": False,
+                        "plan_generated": False,
+                        "plan_keywords": "[]",
+                        "plan_target_count": 0,
+                        "fallback_triggered": False,
+                        "fallback_count": 0,
+                        "total_search_calls": 0,
+                        "books_returned": 0,
+                        "books_added": 0,
+                        "llm_model": request.config.model,
+                        "plan_latency_ms": plan_latency_ms,
+                        "reply_latency_ms": max(0, total_duration_ms - plan_latency_ms),
+                        "total_duration_ms": total_duration_ms,
+                        "error": error_msg
+                    }
+                    chat_logger.write_session(session_log)
+                    chat_logger.write_books([])
+                except Exception as log_err:
+                    print(f"[ChatLogger] 埋点写入失败: {log_err}")
+
                 yield f"data: {json.dumps({'type': 'complete'})}\n\n"
                 return
 
@@ -322,6 +409,23 @@ async def chat(request: ChatRequest):
 
                 new_books = add_to_list(results)
                 if new_books:
+                    # ── 埋点：记录本次搜索返回的书籍 ─────────────────────
+                    for b in new_books:
+                        book_rank_counter += 1
+                        books_log.append({
+                            "log_id": log_id,
+                            "book_id": str(b.get("id", "")),
+                            "rank": book_rank_counter,
+                            "title": b.get("title", ""),
+                            "author": b.get("author", ""),
+                            "language": b.get("language", ""),
+                            "relevance_score": float(b.get("matchScore", 0) or 0) / 100.0,
+                            "source_keyword": kw,
+                            "added_to_list": True,
+                            "match_score": float(b.get("matchScore", 0) or 0)
+                        })
+                    books_returned += len(new_books)
+                    total_search_calls += 1
                     yield f"data: {json.dumps({'type': 'add_books', 'books': new_books})}\n\n"
 
             # ── Phase 3: VERIFY + 补充搜索 ─────────────────────────────────
@@ -347,6 +451,9 @@ async def chat(request: ChatRequest):
                 if kw in keywords:
                     continue
 
+                # ── 埋点：记录兜底触发 ─────────────────────────────────
+                fallback_triggered = True
+
                 yield f"data: {json.dumps({'type': 'tool_status', 'content': f'补充搜索：{kw}（已有 {len(list_state)} 本，目标 {target_count} 本）'})}\n\n"
 
                 results = await call_search_api(
@@ -357,6 +464,23 @@ async def chat(request: ChatRequest):
 
                 new_books = add_to_list(results)
                 if new_books:
+                    # ── 埋点：记录兜底搜索返回的书籍 ─────────────────────
+                    for b in new_books:
+                        book_rank_counter += 1
+                        books_log.append({
+                            "log_id": log_id,
+                            "book_id": str(b.get("id", "")),
+                            "rank": book_rank_counter,
+                            "title": b.get("title", ""),
+                            "author": b.get("author", ""),
+                            "language": b.get("language", ""),
+                            "relevance_score": float(b.get("matchScore", 0) or 0) / 100.0,
+                            "source_keyword": kw,
+                            "added_to_list": True,
+                            "match_score": float(b.get("matchScore", 0) or 0)
+                        })
+                    books_returned += len(new_books)
+                    fallback_count += 1
                     yield f"data: {json.dumps({'type': 'add_books', 'books': new_books})}\n\n"
 
             final_count = len(list_state)
@@ -389,9 +513,74 @@ async def chat(request: ChatRequest):
                     token = chunk.choices[0].delta.content
                     yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
 
+            # ── 埋点：记录 Reply 阶段延迟 ───────────────────────────────
+            reply_latency_ms = max(0, int((datetime.now() - start_time).total_seconds() * 1000) - plan_latency_ms)
+
+            # ── 埋点：写入会话和书籍日志 ───────────────────────────────
+            total_duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            books_added = books_returned  # 后端自动加入列表
+            if chat_logger:
+                try:
+                    session_log = {
+                        "log_id": log_id,
+                        "session_id": session_id,
+                        "timestamp": start_time.isoformat(),
+                        "user_query": request.message,
+                        "query_language": query_language,
+                        "is_search_task": is_search_task,
+                        "plan_generated": plan_generated,
+                        "plan_keywords": plan_keywords,
+                        "plan_target_count": plan_target_count,
+                        "fallback_triggered": fallback_triggered,
+                        "fallback_count": fallback_count,
+                        "total_search_calls": total_search_calls,
+                        "books_returned": books_returned,
+                        "books_added": books_added,
+                        "llm_model": request.config.model,
+                        "plan_latency_ms": plan_latency_ms,
+                        "reply_latency_ms": reply_latency_ms,
+                        "total_duration_ms": total_duration_ms,
+                        "error": error_msg
+                    }
+                    chat_logger.write_session(session_log)
+                    chat_logger.write_books(books_log)
+                except Exception as log_err:
+                    print(f"[ChatLogger] 埋点写入失败: {log_err}")
+
             yield f"data: {json.dumps({'type': 'complete'})}\n\n"
 
         except Exception as e:
+            # ── 埋点：写入错误日志 ───────────────────────────────────
+            error_msg = str(e)
+            total_duration_ms = int((datetime.now() - start_time).total_seconds() * 1000)
+            if chat_logger:
+                try:
+                    session_log = {
+                        "log_id": log_id,
+                        "session_id": session_id,
+                        "timestamp": start_time.isoformat(),
+                        "user_query": request.message,
+                        "query_language": query_language,
+                        "is_search_task": is_search_task,
+                        "plan_generated": plan_generated,
+                        "plan_keywords": plan_keywords if is_search_task else "[]",
+                        "plan_target_count": plan_target_count if is_search_task else 0,
+                        "fallback_triggered": fallback_triggered,
+                        "fallback_count": fallback_count,
+                        "total_search_calls": total_search_calls,
+                        "books_returned": books_returned,
+                        "books_added": books_returned,
+                        "llm_model": request.config.model if request.config else "",
+                        "plan_latency_ms": plan_latency_ms,
+                        "reply_latency_ms": 0,
+                        "total_duration_ms": total_duration_ms,
+                        "error": error_msg
+                    }
+                    chat_logger.write_session(session_log)
+                    chat_logger.write_books(books_log)
+                except Exception as log_err:
+                    print(f"[ChatLogger] 埋点写入失败: {log_err}")
+
             yield f"data: {json.dumps({'type': 'error', 'content': f'AI 对话失败：{str(e)}'})}\n\n"
 
     return StreamingResponse(

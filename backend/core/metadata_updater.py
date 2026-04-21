@@ -5,14 +5,16 @@
 import os
 import json
 import asyncio
+import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 from ebooklib import epub
 
-from .llm_harness import call_llm_batch
+from .llm_harness import call_llm_batch, validate_metadata, VALID_CATEGORY_IDS
 from .epub_meta import INDEX_FILE, load_index, save_index
+from .ai_logger import MetadataLogger
 
 # 批量处理的最大书籍数量（可运行时调整）
 BATCH_SIZE = 5
@@ -239,6 +241,14 @@ async def update_metadata_for_files(
     """
     reset_cancel_flag()
 
+    # ── 埋点：初始化日志记录器 ─────────────────────────────────────
+    task_id = uuid.uuid4().hex
+    metadata_logger: Optional[MetadataLogger] = None
+    try:
+        metadata_logger = MetadataLogger(workspace_path)
+    except Exception as e:
+        print(f"[MetadataLogger] 初始化失败: {e}")
+
     results = []
     success_count = 0
     failed_count = 0
@@ -286,6 +296,7 @@ async def update_metadata_for_files(
             batch_results = []
 
             for i, file_info in enumerate(batch):
+                book_start_time = datetime.now()
                 if is_cancelled():
                     batch_results.append({
                         "filePath": file_info["filePath"],
@@ -306,6 +317,60 @@ async def update_metadata_for_files(
                         updated=False,
                         error=error_msg
                     )
+                    # ── 埋点：记录 LLM 调用失败 ────────────────────────
+                    total_latency_ms = int((datetime.now() - book_start_time).total_seconds() * 1000)
+                    if metadata_logger:
+                        try:
+                            import time
+                            llm_latency_ms = 0  # 无法从失败的调用中获取
+                            parse_success = False
+                            parse_error = error_msg
+                            validation_passed = False
+                            validation_errors = "[]"
+                            subjects_in_range = False
+                            subjects_count_valid = False
+                            year_valid = False
+                            write_success = False
+                            write_error = ""
+                            update_status = "failed_parse" if "parse" in error_msg.lower() or "json" in error_msg.lower() else "failed_llm"
+
+                            # 尝试从 file_info 获取原始元数据
+                            original_metadata = file_info.get("original_metadata", {})
+                            log_record: Dict[str, Any] = {
+                                "log_id": uuid.uuid4().hex,
+                                "task_id": task_id,
+                                "timestamp": book_start_time.isoformat(),
+                                "book_file_path": os.path.basename(file_info["filePath"]),
+                                "book_title": file_info.get("title", ""),
+                                "book_author_original": file_info.get("author") or "",
+                                "book_language": original_metadata.get("language", ""),
+                                "has_original_author": bool(original_metadata.get("author")),
+                                "has_original_description": bool(original_metadata.get("description")),
+                                "has_original_subjects": bool(original_metadata.get("subjects")),
+                                "prompt_type": "batch",
+                                "batch_size": BATCH_SIZE,
+                                "llm_description": "",
+                                "llm_subjects": "[]",
+                                "llm_year": None,
+                                "llm_author": "",
+                                "parse_success": parse_success,
+                                "parse_error": parse_error,
+                                "validation_passed": validation_passed,
+                                "validation_errors": validation_errors,
+                                "subjects_in_range": subjects_in_range,
+                                "subjects_count_valid": subjects_count_valid,
+                                "year_valid": year_valid,
+                                "write_success": write_success,
+                                "write_error": write_error,
+                                "update_status": update_status,
+                                "llm_latency_ms": llm_latency_ms,
+                                "total_latency_ms": total_latency_ms,
+                                "llm_model": config.get("model", "")
+                            }
+                            metadata_logger.write_update(log_record)
+                        except Exception as log_err:
+                            print(f"[MetadataLogger] 埋点写入失败: {log_err}")
+
                     batch_results.append({
                         "filePath": file_info["filePath"],
                         "title": file_info["title"],
@@ -324,6 +389,59 @@ async def update_metadata_for_files(
 
                 metadata = llm_result["metadata"]
                 success, error = update_epub_metadata(file_info["filePath"], metadata)
+
+                # ── 埋点：记录每本书的处理结果 ────────────────────────
+                total_latency_ms = int((datetime.now() - book_start_time).total_seconds() * 1000)
+                llm_latency_ms = int(metadata.get("_llm_latency_ms", 0)) if isinstance(metadata, dict) else 0
+                if metadata_logger:
+                    try:
+                        original_metadata = file_info.get("original_metadata", {})
+                        from .llm_harness import validate_metadata, VALID_CATEGORY_IDS
+                        validation_passed, validation_err = validate_metadata(metadata)
+                        subjects_in_range = all(str(c) in VALID_CATEGORY_IDS for c in metadata.get("categories", []))
+                        subjects_count_valid = 1 <= len(metadata.get("categories", [])) <= 3
+                        year_val = metadata.get("publishYear")
+                        year_valid = year_val is not None and isinstance(year_val, (int, float)) and -3000 <= year_val <= datetime.now().year + 1
+                        if not year_valid and year_val is not None:
+                            pass  # keep validation result
+                        parse_success = True
+                        parse_error = ""
+                        update_status = "success" if success else "failed_write"
+
+                        log_record: Dict[str, Any] = {
+                            "log_id": uuid.uuid4().hex,
+                            "task_id": task_id,
+                            "timestamp": book_start_time.isoformat(),
+                            "book_file_path": os.path.basename(file_info["filePath"]),
+                            "book_title": file_info.get("title", ""),
+                            "book_author_original": file_info.get("author") or "",
+                            "book_language": original_metadata.get("language", "") if isinstance(original_metadata, dict) else "",
+                            "has_original_author": bool(original_metadata.get("author")) if isinstance(original_metadata, dict) else False,
+                            "has_original_description": bool(original_metadata.get("description")) if isinstance(original_metadata, dict) else False,
+                            "has_original_subjects": bool(original_metadata.get("subjects")) if isinstance(original_metadata, dict) else False,
+                            "prompt_type": "batch",
+                            "batch_size": BATCH_SIZE,
+                            "llm_description": metadata.get("description", "") if isinstance(metadata, dict) else "",
+                            "llm_subjects": json.dumps(metadata.get("categories", [])) if isinstance(metadata, dict) else "[]",
+                            "llm_year": metadata.get("publishYear") if isinstance(metadata, dict) else None,
+                            "llm_author": metadata.get("author", "") if isinstance(metadata, dict) else "",
+                            "parse_success": parse_success,
+                            "parse_error": parse_error,
+                            "validation_passed": validation_passed,
+                            "validation_errors": json.dumps([validation_err] if validation_err else []) if not validation_passed else "[]",
+                            "subjects_in_range": subjects_in_range,
+                            "subjects_count_valid": subjects_count_valid,
+                            "year_valid": year_valid,
+                            "write_success": success,
+                            "write_error": error or "",
+                            "update_status": update_status,
+                            "llm_latency_ms": llm_latency_ms,
+                            "total_latency_ms": total_latency_ms,
+                            "llm_model": config.get("model", "")
+                        }
+                        metadata_logger.write_update(log_record)
+                    except Exception as log_err:
+                        print(f"[MetadataLogger] 埋点写入失败: {log_err}")
 
                 if success:
                     # 写入成功后更新索引（包含作者等信息）

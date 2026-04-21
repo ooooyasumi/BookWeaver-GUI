@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from api import books, download, chat, config, workspace, library, metadata, upload
+from api import books, download, chat, config, workspace, library, metadata, upload, logs
 
 # cover 模块单独导入，便于诊断 Windows 打包问题
 try:
@@ -49,6 +49,7 @@ app.include_router(config.router, prefix="/api/config", tags=["配置"])
 app.include_router(library.router, prefix="/api/library", tags=["图书管理"])
 app.include_router(metadata.router, prefix="/api/metadata", tags=["元数据管理"])
 app.include_router(upload.router, prefix="/api/upload", tags=["书籍上传"])
+app.include_router(logs.router, prefix="/api/logs", tags=["数据日志"])
 if _cover_ok:
     app.include_router(cover.router, prefix="/api/cover", tags=["封面管理"])
 else:
